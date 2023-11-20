@@ -10,6 +10,9 @@ from finrl.config_tickers import DOW_30_TICKER
 from finrl.meta.data_processor import DataProcessor
 from finrl.meta.env_stock_trading.env_stocktrading_np import StockTradingEnv
 
+import dill
+import os.path
+
 # construct environment
 
 
@@ -27,12 +30,21 @@ def train(
     **kwargs,
 ):
     # download data
-    dp = DataProcessor(data_source, **kwargs)
-    data = dp.download_data(ticker_list, start_date, end_date, time_interval)
-    data = dp.clean_data(data)
+    dp = DataProcessor(data_source, start_date, end_date, time_interval, **kwargs)
+    if os.path.isfile('price.pkl'):
+        with open('price.pkl', 'rb') as f:
+            print('load dill')
+            data_load = dill.load(f)
+    else:
+        data_load = dp.download_data(ticker_list, start_date, end_date, time_interval)
+        with open('price.pkl', 'wb') as f:
+            print('write dill')
+            dill.dump(data_load, f)
+    data = data_load
+    data = dp.clean_data(data, start_date, end_date)
     data = dp.add_technical_indicator(data, technical_indicator_list)
     if if_vix:
-        data = dp.add_vix(data)
+        data = dp.add_vix(data, start_date, end_date)
     price_array, tech_array, turbulence_array = dp.df_to_array(data, if_vix)
     env_config = {
         "price_array": price_array,

@@ -9,9 +9,11 @@ from finrl.meta.data_processors.processor_yahoofinance import (
     YahooFinanceProcessor as YahooFinance,
 )
 
+from functools import cache
+
 
 class DataProcessor:
-    def __init__(self, data_source, tech_indicator=None, vix=None, **kwargs):
+    def __init__(self, data_source, start_date, end_date, time_interval, tech_indicator=None, vix=None, **kwargs):
         if data_source == "alpaca":
             try:
                 API_KEY = kwargs.get("API_KEY")
@@ -26,7 +28,7 @@ class DataProcessor:
             self.processor = Wrds()
 
         elif data_source == "yahoofinance":
-            self.processor = YahooFinance()
+            self.processor = YahooFinance(start_date, end_date, time_interval)
 
         else:
             raise ValueError("Data source input is NOT supported yet.")
@@ -46,8 +48,8 @@ class DataProcessor:
         )
         return df
 
-    def clean_data(self, df) -> pd.DataFrame:
-        df = self.processor.clean_data(df)
+    def clean_data(self, df, start, end) -> pd.DataFrame:
+        df = self.processor.clean_data(df, start, end)
 
         return df
 
@@ -72,8 +74,8 @@ class DataProcessor:
 
         return df
 
-    def add_vix(self, df) -> pd.DataFrame:
-        df = self.processor.add_vix(df)
+    def add_vix(self, df, start, end) -> pd.DataFrame:
+        df = self.processor.add_vix(df, start, end)
 
         return df
 

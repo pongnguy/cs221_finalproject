@@ -423,7 +423,9 @@ def train_agent(args: Config):
     agent = args.agent_class(
         args.net_dims, args.state_dim, args.action_dim, gpu_id=args.gpu_id, args=args
     )
-    agent.states = env.reset()[np.newaxis, :]
+    # TODO Alfred this produced an error
+    agent.states = env.reset()[0]
+    #agent.states = env.reset()[np.newaxis, :]
 
     evaluator = Evaluator(
         eval_env=build_env(args.env_class, args.env_args),

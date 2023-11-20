@@ -20,14 +20,19 @@ import pytz
 import yfinance as yf
 from stockstats import StockDataFrame as Sdf
 
+import dill
+import os.path
 
 class YahooFinanceProcessor:
     """Provides methods for retrieving daily stock data from
     Yahoo Finance API
     """
 
-    def __init__(self):
-        pass
+    def __init__(self, start, end, time_interval):
+        # TODO Alfred initialize these variables
+        self.start = start
+        self.end = end
+        self.time_interval = time_interval
 
     """
     Param
@@ -126,13 +131,13 @@ class YahooFinanceProcessor:
 
         return data_df
 
-    def clean_data(self, df: pd.DataFrame) -> pd.DataFrame:
+    def clean_data(self, df: pd.DataFrame, start, end) -> pd.DataFrame:
         tic_list = np.unique(df.tic.values)
         NY = "America/New_York"
 
-        trading_days = self.get_trading_days(start=self.start, end=self.end)
+        trading_days = self.get_trading_days(start=start, end=end)
         # produce full timestamp index
-        if self.time_interval == "1d":
+        if self.time_interval in ["1d", "1D"]:
             times = trading_days
         elif self.time_interval == "1m":
             times = []
@@ -260,14 +265,24 @@ class YahooFinanceProcessor:
         df = df.sort_values(by=["timestamp", "tic"])
         return df
 
-    def add_vix(self, data: pd.DataFrame) -> pd.DataFrame:
+    def add_vix(self, data: pd.DataFrame, start, end) -> pd.DataFrame:
         """
         add vix from yahoo finance
         :param data: (df) pandas dataframe
         :return: (df) pandas dataframe
         """
-        vix_df = self.download_data(["VIXY"], self.start, self.end, self.time_interval)
-        cleaned_vix = self.clean_data(vix_df)
+
+        if os.path.isfile('vix.pkl'):
+            with open('vix.pkl', 'rb') as f:
+                print('load dill')
+                vix_df_load = dill.load(f)
+        else:
+            vix_df_load = self.download_data(["VIXY"], self.start, self.end, self.time_interval)
+            with open('vix.pkl', 'wb') as f:
+                print('write dill')
+                dill.dump(vix_df_load, f)
+        vix_df = vix_df_load
+        cleaned_vix = self.clean_data(vix_df, start, end)
         print("cleaned_vix\n", cleaned_vix)
         vix = cleaned_vix[["timestamp", "close"]]
         print('cleaned_vix[["timestamp", "close"]\n', vix)
@@ -372,6 +387,8 @@ class YahooFinanceProcessor:
     def get_trading_days(self, start: str, end: str) -> list[str]:
         nyse = tc.get_calendar("NYSE")
         df = nyse.sessions_in_range(
+            # TODO Alfred debugging
+            #pd.Timestamp(start), pd.Timestamp(end)
             pd.Timestamp(start, tz=pytz.UTC), pd.Timestamp(end, tz=pytz.UTC)
         )
         trading_days = []

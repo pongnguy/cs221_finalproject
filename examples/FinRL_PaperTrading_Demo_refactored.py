@@ -7,19 +7,19 @@ from __future__ import annotations
 import argparse
 
 parser = argparse.ArgumentParser()
-parser.add_argument("data_key", help="data source api key")
-parser.add_argument("data_secret", help="data source api secret")
-parser.add_argument("data_url", help="data source api base url")
-parser.add_argument("trading_key", help="trading api key")
-parser.add_argument("trading_secret", help="trading api secret")
-parser.add_argument("trading_url", help="trading api base url")
+#parser.add_argument("data_key", help="data source api key")
+#parser.add_argument("data_secret", help="data source api secret")
+#parser.add_argument("data_url", help="data source api base url")
+#parser.add_argument("trading_key", help="trading api key")
+#parser.add_argument("trading_secret", help="trading api secret")
+#parser.add_argument("trading_url", help="trading api base url")
 args = parser.parse_args()
-DATA_API_KEY = args.data_key
-DATA_API_SECRET = args.data_secret
-DATA_API_BASE_URL = args.data_url
-TRADING_API_KEY = args.trading_key
-TRADING_API_SECRET = args.trading_secret
-TRADING_API_BASE_URL = args.trading_url
+DATA_API_KEY = 'PKD6CSN42593ZNZFM7ME'
+DATA_API_SECRET = '4cmC7PNor9yfyGMEqpTWJ6z2pwuL8hH7z5Zefntq'
+DATA_API_BASE_URL = 'https://paper-api.alpaca.markets'
+TRADING_API_KEY = 'PKD6CSN42593ZNZFM7ME'
+TRADING_API_SECRET = '4cmC7PNor9yfyGMEqpTWJ6z2pwuL8hH7z5Zefntq'
+TRADING_API_BASE_URL = 'https://paper-api.alpaca.markets'
 
 print("DATA_API_KEY: ", DATA_API_KEY)
 print("DATA_API_SECRET: ", DATA_API_SECRET)
