@@ -153,6 +153,8 @@ class PaperTradingAlpaca:
         print("Waiting for market to open...")
         self.awaitMarketOpen()
         print("Market opened.")
+        iterations = 0
+        maxIterations = 2
         while True:
             # Figure out when the market will close so we can prepare to sell beforehand.
             clock = self.alpaca.get_clock()
@@ -161,8 +163,10 @@ class PaperTradingAlpaca:
             ).timestamp()
             currTime = clock.timestamp.replace(tzinfo=datetime.timezone.utc).timestamp()
             self.timeToClose = closingTime - currTime
+            iterations += 1
+            print('iteration: ', iterations)
 
-            if self.timeToClose < (60 * 2):
+            if self.timeToClose < (60 * 2) or iterations > maxIterations:
                 # Close all positions when 2 minutes til market close.  Any less and it will be in danger of not closing positions in time.
 
                 print("Market closing soon.  Closing positions.")
@@ -186,14 +190,20 @@ class PaperTradingAlpaca:
                     x.join()
 
                 # Run script again after market close for next trading day.
-                print("Sleeping until market close (15 minutes).")
-                time.sleep(60 * 15)
+                # TODO Alfred break loop
+                break
+                #print("Sleeping until market close (15 minutes).")
+                #time.sleep(60 * 15)
 
             else:
                 self.trade()
                 last_equity = float(self.alpaca.get_account().last_equity)
                 cur_time = time.time()
                 self.equities.append([cur_time, last_equity])
+                print('sleep for seconds ', self.time_interval)
+                #print('sleep for seconds ', str(60))
+                # only sleep for 1 minute
+                #time.sleep(60)
                 time.sleep(self.time_interval)
 
     def awaitMarketOpen(self):

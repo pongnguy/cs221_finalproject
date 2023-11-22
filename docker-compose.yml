@@ -1,0 +1,20 @@
+version: "3.8"
+
+services:
+  jupyter:
+    image: alfred/cs221:jupyter
+    #image: jupyter/datascience-notebook:latest
+    #build: .
+    container_name: jupyter
+    ports:
+      - 8890:8888
+    volumes:
+      - ./examples:/home/jovyan/work
+    environment:
+      - JUPYTER_ENABLE_LAB=yes
+      - GRANT_SUDO=yes
+      - NB_UID=1000
+      - NB_GID=100
+      - CHOWN_HOME=yes
+      - CHOWN_HOME_OPTS='-R'
+      - CHOWN_EXTRA_OPTS='-R'

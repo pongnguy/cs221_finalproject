@@ -106,6 +106,7 @@ class StockTradingEnv(gym.Env):
         return self.get_state(price), {}  # state
 
     def step(self, actions):
+        # Alfred scale actions to 100
         actions = (actions * self.max_stock).astype(int)
 
         self.day += 1
@@ -114,19 +115,25 @@ class StockTradingEnv(gym.Env):
 
         if self.turbulence_bool[self.day] == 0:
             min_action = int(self.max_stock * self.min_stock_rate)  # stock_cd
+            # Alfred determine stocks to sell
             for index in np.where(actions < -min_action)[0]:  # sell_index:
                 if price[index] > 0:  # Sell only if current asset is > 0
+                    # Alfred evaluate RL action for selling
                     sell_num_shares = min(self.stocks[index], -actions[index])
+                    # Alfred queue for selling
                     self.stocks[index] -= sell_num_shares
                     self.amount += (
                         price[index] * sell_num_shares * (1 - self.sell_cost_pct)
                     )
                     self.stocks_cool_down[index] = 0
+            # Alfred determine stocks to buy
             for index in np.where(actions > min_action)[0]:  # buy_index:
                 if (
                     price[index] > 0
                 ):  # Buy only if the price is > 0 (no missing data in this particular date)
+                    # Alfred evaluate RL action for buying
                     buy_num_shares = min(self.amount // price[index], actions[index])
+                    # Alfred queue for buying
                     self.stocks[index] += buy_num_shares
                     self.amount -= (
                         price[index] * buy_num_shares * (1 + self.buy_cost_pct)

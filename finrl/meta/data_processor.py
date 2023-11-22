@@ -28,6 +28,9 @@ class DataProcessor:
         elif data_source == "yahoofinance":
             self.processor = YahooFinance()
 
+        elif data_source == "local":
+            self.processor = Local()
+
         else:
             raise ValueError("Data source input is NOT supported yet.")
 
