@@ -8,7 +8,7 @@ group "default" {
 
 target "cs221" {
   dockerfile = "Dockerfile"
-  tags = ["docker.io/alfred/cs221:${TAG}"]
+  tags = ["alfred/cs221:${TAG}"]
   output = ["type=docker"]
 }
 
