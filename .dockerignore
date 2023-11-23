@@ -1,1 +1,9 @@
-datasets
+# excludes all files/directories
+*
+*/*
+
+# includes examples and requirements.txt
+!requirements.txt
+!environment.yml
+# includes the files within examples
+!examples/*

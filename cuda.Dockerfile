@@ -1,4 +1,4 @@
-FROM ubuntu:22.04
+FROM nvidia/cuda:12.3.0-devel-ubuntu22.04
 RUN apt-get update && apt-get install -y curl
 RUN curl -L -O "https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-$(uname)-$(uname -m).sh" && \
   bash Miniforge3-$(uname)-$(uname -m).sh -b -p $HOME/miniconda
@@ -21,10 +21,14 @@ RUN --mount=type=cache,target=/root/miniconda/pkgs,target=/root/.conda/pkgs,targ
 #  pip install jupyterlab
 #RUN --mount=type=cache,target=/root/.cache/pip \
 #  pip install stable-baselines3
-COPY ./examples /root/
-
-# TODO Alfred not sure if this is necessary
 SHELL ["mamba", "run", "--no-capture-output", "-n", "FinRL3", "/bin/bash", "-c"]
+RUN python -m ipykernel install --user --name=FinRL3
+RUN jupyter notebook --generate-config
+RUN jupyter notebook password <<< $'Cc17931793\nCc17931793\n'
+COPY ./examples /root/
+RUN mamba install cuda
+#RUN apt-get install -y nvidia-docker2
+
 
 ENTRYPOINT ["mamba", "run", "--no-capture-output", "-n", "FinRL3", "jupyter", "lab", "--ip=0.0.0.0", "--port=8888", "--allow-root", "--no-browser"]
 #CMD ["jupyter lab --ip=0.0.0.0 --port=8888 --allow-root --no-browser"]

@@ -142,6 +142,7 @@ class FeatureEngineer:
         """
         df = data.copy()
         df = df.sort_values(by=["tic", "date"])
+        # TODO Alfred does this just download precomputed indicators?
         stock = Sdf.retype(df.copy())
         unique_ticker = stock.tic.unique()
 
