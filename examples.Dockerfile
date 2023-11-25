@@ -1,4 +1,4 @@
-FROM ubuntu:22.04
+FROM ubuntu:22.04 AS build
 RUN apt-get update && apt-get install -y curl
 RUN curl -L -O "https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-$(uname)-$(uname -m).sh" && \
   bash Miniforge3-$(uname)-$(uname -m).sh -b -p $HOME/miniconda
@@ -43,6 +43,12 @@ RUN pip install -e /workspace
 COPY jupyter_server_config.json /root/.jupyter/jupyter_server_config.json
 #RUN jupyter notebook password <<< $'Cc17931793\nCc17931793\n'
 RUN mamba install -y -c conda-forge jupyterlab-git
+
+FROM alfred/cs221_finalproject:latest AS config
+#FROM ubuntu:22.04
+#COPY --from=build /root/miniconda/envs/FinRL3 /root/miniconda/envs/FinRL3
+# Update workspace without having to reinstall FinRL
+COPY . /workspace
 WORKDIR /workspace
 RUN git config --global user.email "alfred.wechselberger@gmail.com"
 RUN git config --global user.name "pongnguy"

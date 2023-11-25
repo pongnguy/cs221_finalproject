@@ -317,11 +317,18 @@ class StockTradingEnv(gym.Env):
             # print("begin_total_asset:{}".format(begin_total_asset))
 
             # Alfred fold over pairs buy/sell into individual stock buy/sell
-            # TODO Alfred set pairs to desired pairs, and according to their prices
-            actions[0] += actions[self.stock_dim]
-            actions[1] -= actions[self.stock_dim]
-            actions[2] += actions[self.stock_dim+1]
-            actions[3] -= actions[self.stock_dim+1]
+            # Alfred set pairs to desired pairs, and buy/sell in units of the average stock price
+            import statistics
+            index_pair00 = 0
+            index_pair01 = 1
+            average_price0 = statistics.mean({self.state[index_pair00 + 1], self.state[index_pair01 + 1]})
+            actions[index_pair00] += actions[self.stock_dim] * (average_price0 / self.state[index_pair00 + 1])
+            actions[index_pair01] -= actions[self.stock_dim] * (average_price0 / self.state[index_pair01 + 1])
+            index_pair10 = 2
+            index_pair11 = 3
+            average_price1 = statistics.mean({self.state[index_pair10 + 1], self.state[index_pair11 + 1]})
+            actions[index_pair10] += actions[self.stock_dim+1] * (average_price1 / self.state[index_pair10 + 1])
+            actions[index_pair11] -= actions[self.stock_dim+1] * (average_price1 / self.state[index_pair11 + 1])
             argsort_actions = np.argsort(actions[0:self.stock_dim])
             # Alfred sell if action < 0, buy > 0, hold if =0
             sell_index = argsort_actions[: np.where(actions[0:self.stock_dim] < 0)[0].shape[0]]
@@ -356,6 +363,7 @@ class StockTradingEnv(gym.Env):
                     self.turbulence = self.data[self.risk_indicator_col].values[0]
             self.state = self._update_state()
 
+            # Alfred state is position in stocks, and price of stocks
             end_total_asset = self.state[0] + sum(
                 np.array(self.state[1 : (self.stock_dim + 1)])
                 * np.array(self.state[(self.stock_dim + 1) : (self.stock_dim * 2 + 1)])
