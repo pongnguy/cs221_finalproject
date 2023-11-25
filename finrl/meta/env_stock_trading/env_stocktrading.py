@@ -120,6 +120,8 @@ class StockTradingEnv(gym.Env):
                     # update balance
                     self.state[0] += sell_amount
 
+                    # Alfred decrement number of shares held in the state for the stock
+                    # Alfred if pairs of stock, decrement one and increment another one
                     self.state[index + self.stock_dim + 1] -= sell_num_shares
                     self.cost += (
                         self.state[index + 1]
@@ -187,8 +189,10 @@ class StockTradingEnv(gym.Env):
                     * buy_num_shares
                     * (1 + self.buy_cost_pct[index])
                 )
+                # Alfred first state value is cash on hand?
                 self.state[0] -= buy_amount
 
+                # Alfred another state value gives how many shares
                 self.state[index + self.stock_dim + 1] += buy_num_shares
 
                 self.cost += (
@@ -219,6 +223,7 @@ class StockTradingEnv(gym.Env):
 
     def step(self, actions):
         self.terminal = self.day >= len(self.df.index.unique()) - 1
+        # Alfred change this section so that "selling" a pair will short one and buy the other, and vice versa
         if self.terminal:
             # print(f"Episode: {self.episode}")
             if self.make_plots:
@@ -320,6 +325,7 @@ class StockTradingEnv(gym.Env):
             for index in sell_index:
                 # print(f"Num shares before: {self.state[index+self.stock_dim+1]}")
                 # print(f'take sell action before : {actions[index]}')
+                # Alfred sell the stock if instructed by action
                 actions[index] = self._sell_stock(index, actions[index]) * (-1)
                 # print(f'take sell action after : {actions[index]}')
                 # print(f"Num shares after: {self.state[index+self.stock_dim+1]}")
@@ -346,6 +352,7 @@ class StockTradingEnv(gym.Env):
             )
             self.asset_memory.append(end_total_asset)
             self.date_memory.append(self._get_date())
+            # Alfred reward is increased total asset from one day to the next
             self.reward = end_total_asset - begin_total_asset
             self.rewards_memory.append(self.reward)
             self.reward = self.reward * self.reward_scaling
