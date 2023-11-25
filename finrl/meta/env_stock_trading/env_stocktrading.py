@@ -101,9 +101,7 @@ class StockTradingEnv(gym.Env):
 
     def _sell_stock(self, index, action):
         def _do_sell_normal():
-            if (
-                self.state[index + 2 * self.stock_dim + 1] != True
-            ):  # check if the stock is able to sell, for simlicity we just add it in techical index
+            if (self.state[index + 2 * self.stock_dim + 1] != True):  # check if the stock is able to sell, for simlicity we just add it in techical index
                 # if self.state[index + 1] > 0: # if we use price<0 to denote a stock is unable to trade in that day, the total asset calculation may be wrong for the price is unreasonable
                 # Sell only if the price is > 0 (no missing data in this particular date)
                 # perform sell action based on the sign of the action
@@ -318,9 +316,20 @@ class StockTradingEnv(gym.Env):
             )
             # print("begin_total_asset:{}".format(begin_total_asset))
 
-            argsort_actions = np.argsort(actions)
-            sell_index = argsort_actions[: np.where(actions < 0)[0].shape[0]]
-            buy_index = argsort_actions[::-1][: np.where(actions > 0)[0].shape[0]]
+            # Alfred fold over pairs buy/sell into individual stock buy/sell
+            # TODO Alfred set pairs to desired pairs, and according to their prices
+            actions[0] += actions[self.stock_dim]
+            actions[1] -= actions[self.stock_dim]
+            actions[2] += actions[self.stock_dim+1]
+            actions[3] -= actions[self.stock_dim+1]
+            argsort_actions = np.argsort(actions[0:self.stock_dim])
+            # Alfred sell if action < 0, buy > 0, hold if =0
+            sell_index = argsort_actions[: np.where(actions[0:self.stock_dim] < 0)[0].shape[0]]
+            buy_index = argsort_actions[::-1][: np.where(actions[0:self.stock_dim] > 0)[0].shape[0]]
+            # Alfred add pairs actions to sell and buy indices
+            #argsort_actions_pairs = np.argsort(actions[self.stock_dim:])
+            #sell_index_pairs = argsort_actions_pairs[: np.where(actions[self.stock_dim:] < 0)[0].shape[0]]
+            #buy_index_pairs = argsort_actions_pairs[::-1][: np.where(actions[self.stock_dim:] > 0)[0].shape[0]]
 
             for index in sell_index:
                 # print(f"Num shares before: {self.state[index+self.stock_dim+1]}")
@@ -334,7 +343,8 @@ class StockTradingEnv(gym.Env):
                 # print('take buy action: {}'.format(actions[index]))
                 actions[index] = self._buy_stock(index, actions[index])
 
-            self.actions_memory.append(actions)
+            # Alfred debugging, probably correct since resulting actions are not from pairs directly since they get mapped to individual stocks
+            self.actions_memory.append(actions[0:self.stock_dim])
 
             # state: s -> s+1
             self.day += 1
