@@ -35,6 +35,7 @@ COPY ./examples /root/
 #RUN mamba install cuda
 #RUN apt-get install -y nvidia-docker2
 RUN pip install git+https://github.com/AI4Finance-Foundation/FinRL.git
+RUN pip install jupyterlab_nvdashboard
 
 
 ENTRYPOINT ["mamba", "run", "--no-capture-output", "-n", "FinRL3", "jupyter", "lab", "--ip=0.0.0.0", "--port=8888", "--allow-root", "--no-browser"]
