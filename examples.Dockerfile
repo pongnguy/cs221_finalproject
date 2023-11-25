@@ -10,7 +10,7 @@ RUN apt-get -y install git
 #COPY environment.yml /root/environment.yml
 # install mamba environment
 RUN --mount=type=cache,target=/root/miniconda/pkgs,target=/root/.conda/pkgs \
-  mamba create -n FinRL3
+  mamba create -n FinRL3 python=3.10
 # Make RUN commands use the new environment:
 SHELL ["mamba", "run", "--no-capture-output", "-n", "FinRL3", "/bin/bash", "-c"]
 #RUN --mount=type=cache,target=/root/.cache/pip \
@@ -29,13 +29,28 @@ RUN pip install jupyter jupyterlab
 RUN python -m ipykernel install --user --name=FinRL3
 RUN jupyter notebook --generate-config
 # TODO triple <<< messes with syntax highlighting
-RUN jupyter notebook password <<< $'Cc17931793\nCc17931793\n'
-COPY ./examples /workspace/
-COPY ./examples /root/
+#RUN jupyter notebook password <<< $'Cc17931793\nCc17931793\n'
+#RUN echo 'Cc17931793\nCc17931793\n' | jupyter notebook password
+# Copy over precomputed password hash
+#COPY jupyter_notebook_config.json /root/.jupyter/jupyter_notebook_config.json
+RUN pip install jupyterlab_nvdashboard
 #RUN mamba install cuda
 #RUN apt-get install -y nvidia-docker2
-RUN pip install git+https://github.com/AI4Finance-Foundation/FinRL.git
-RUN pip install jupyterlab_nvdashboard
+COPY . /workspace
+RUN pip install -e /workspace
+#RUN pip install git+https://github.com/AI4Finance-Foundation/FinRL.git
+#COPY jupyter_notebook_config.json /root/.jupyter/jupyter_notebook_config.json
+COPY jupyter_server_config.json /root/.jupyter/jupyter_server_config.json
+#RUN jupyter notebook password <<< $'Cc17931793\nCc17931793\n'
+RUN mamba install -y -c conda-forge jupyterlab-git
+WORKDIR /workspace
+RUN git config --global user.email "alfred.wechselberger@gmail.com"
+RUN git config --global user.name "pongnguy"
+RUN mkdir -p /root/.ssh
+COPY id_rsa /root/.ssh
+RUN ssh-keyscan -t rsa github.com >> ~/.ssh/known_hosts
+RUN chmod go-rwx /root/.ssh/id_rsa
+
 
 
 ENTRYPOINT ["mamba", "run", "--no-capture-output", "-n", "FinRL3", "jupyter", "lab", "--ip=0.0.0.0", "--port=8888", "--allow-root", "--no-browser"]
