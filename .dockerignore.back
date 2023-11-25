@@ -1,0 +1,14 @@
+# excludes all files/directories
+*
+*/*
+
+# includes examples and requirements.txt
+!requirements.txt
+!environment.yml
+!finrl
+!pyproject.toml
+!poetry.lock
+!README.md
+!jupyter_notebook_config.json
+# includes the files within examples
+!examples/*
