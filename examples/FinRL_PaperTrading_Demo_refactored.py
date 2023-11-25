@@ -57,9 +57,9 @@ from pandas.tseries.offsets import BDay  # BDay is business day, not birthday...
 today = datetime.datetime.today()
 
 TEST_END_DATE = (today - BDay(1)).to_pydatetime().date()
-TEST_START_DATE = (TEST_END_DATE - BDay(1)).to_pydatetime().date()
+TEST_START_DATE = (TEST_END_DATE - BDay(10)).to_pydatetime().date()
 TRAIN_END_DATE = (TEST_START_DATE - BDay(1)).to_pydatetime().date()
-TRAIN_START_DATE = (TRAIN_END_DATE - BDay(5)).to_pydatetime().date()
+TRAIN_START_DATE = (TRAIN_END_DATE - BDay(50)).to_pydatetime().date()
 TRAINFULL_START_DATE = TRAIN_START_DATE
 TRAINFULL_END_DATE = TEST_END_DATE
 
@@ -70,6 +70,13 @@ TEST_END_DATE = str(TEST_END_DATE)
 TRAINFULL_START_DATE = str(TRAINFULL_START_DATE)
 TRAINFULL_END_DATE = str(TRAINFULL_END_DATE)
 
+#TRAIN_START_DATE = '2015-01-01'
+#TRAIN_END_DATE = '2015-01-20'
+#TEST_START_DATE = '2015-01-21'
+#TEST_END_DATE = '2015-01-22'
+#TRAINFULL_START_DATE = '2015-01-01'
+#TRAINFULL_END_DATE = '2015-01-22'
+
 print("TRAIN_START_DATE: ", TRAIN_START_DATE)
 print("TRAIN_END_DATE: ", TRAIN_END_DATE)
 print("TEST_START_DATE: ", TEST_START_DATE)
@@ -77,25 +84,41 @@ print("TEST_END_DATE: ", TEST_END_DATE)
 print("TRAINFULL_START_DATE: ", TRAINFULL_START_DATE)
 print("TRAINFULL_END_DATE: ", TRAINFULL_END_DATE)
 
-train(
-    start_date=TRAIN_START_DATE,
-    end_date=TRAIN_END_DATE,
-    ticker_list=ticker_list,
-    data_source="alpaca",
-    time_interval="1Min",
-    technical_indicator_list=INDICATORS,
-    drl_lib="elegantrl",
-    env=env,
-    model_name="ppo",
-    if_vix=True,
-    API_KEY=DATA_API_KEY,
-    API_SECRET=DATA_API_SECRET,
-    API_BASE_URL=DATA_API_BASE_URL,
-    erl_params=ERL_PARAMS,
-    cwd="./papertrading_erl",  # current_working_dir
-    break_step=1e5,
-)
 
+import dill
+import os
+
+if os.path.isfile('train.pkl'):
+    with open('train.pkl', 'rb') as f:
+        print('load dill train')
+        env = dill.load(f)
+else:
+    # Alfred train time_interval is set for 1D in order to match the training data
+    train(
+        start_date=TRAIN_START_DATE,
+        end_date=TRAIN_END_DATE,
+        ticker_list=ticker_list,
+        data_source="alpaca",
+        time_interval="1D",
+        technical_indicator_list=INDICATORS,
+        drl_lib="elegantrl",
+        env=env,
+        model_name="td3",
+        #model_name="ppo",
+        if_vix=True,
+        API_KEY=DATA_API_KEY,
+        API_SECRET=DATA_API_SECRET,
+        API_BASE_URL=DATA_API_BASE_URL,
+        erl_params=ERL_PARAMS,
+        cwd="./papertrading_erl",  # current_working_dir
+        break_step=1e5,
+    )
+    print('end of train')
+    with open('train.pkl', 'wb') as f:
+        print('write dill')
+        dill.dump(env, f)
+
+# Alfred test value is less than train time_interval
 account_value_erl = test(
     start_date=TEST_START_DATE,
     end_date=TEST_END_DATE,
@@ -105,7 +128,7 @@ account_value_erl = test(
     technical_indicator_list=INDICATORS,
     drl_lib="elegantrl",
     env=env,
-    model_name="ppo",
+    model_name="td3",
     if_vix=True,
     API_KEY=DATA_API_KEY,
     API_SECRET=DATA_API_SECRET,
@@ -114,24 +137,41 @@ account_value_erl = test(
     net_dimension=ERL_PARAMS["net_dimension"],
 )
 
-train(
-    start_date=TRAINFULL_START_DATE,  # After tuning well, retrain on the training and testing sets
-    end_date=TRAINFULL_END_DATE,
-    ticker_list=ticker_list,
-    data_source="alpaca",
-    time_interval="1Min",
-    technical_indicator_list=INDICATORS,
-    drl_lib="elegantrl",
-    env=env,
-    model_name="ppo",
-    if_vix=True,
-    API_KEY=DATA_API_KEY,
-    API_SECRET=DATA_API_SECRET,
-    API_BASE_URL=DATA_API_BASE_URL,
-    erl_params=ERL_PARAMS,
-    cwd="./papertrading_erl_retrain",
-    break_step=2e5,
-)
+import numpy as np
+import matplotlib.pyplot as plt
+x = np.linspace(1, len(account_value_erl), len(account_value_erl))
+#x = np.arange(np.datetime64(TEST_START_DATE),np.datetime64(TEST_END_DATE), np.timedelta64(1, 'm'))
+plt.plot(x, account_value_erl)
+#plt.show()
+plt.savefig('fig.png')
+
+if os.path.isfile('trainfull.pkl'):
+    with open('trainfull.pkl', 'rb') as f:
+        print('load dill trainfull')
+        env = dill.load(f)
+else:
+    train(
+        start_date=TRAINFULL_START_DATE,  # After tuning well, retrain on the training and testing sets
+        end_date=TRAINFULL_END_DATE,
+        ticker_list=ticker_list,
+        data_source="alpaca",
+        time_interval="1D",
+        technical_indicator_list=INDICATORS,
+        drl_lib="elegantrl",
+        env=env,
+        model_name="td3",
+        if_vix=True,
+        API_KEY=DATA_API_KEY,
+        API_SECRET=DATA_API_SECRET,
+        API_BASE_URL=DATA_API_BASE_URL,
+        erl_params=ERL_PARAMS,
+        cwd="./papertrading_erl_retrain",
+        break_step=2e5,
+    )
+    print('end of trainfull')
+    with open('trainfull.pkl', 'wb') as f:
+        print('write dill')
+        dill.dump(env, f)
 
 action_dim = len(DOW_30_TICKER)
 state_dim = (
@@ -142,7 +182,7 @@ paper_trading_erl = PaperTradingAlpaca(
     ticker_list=DOW_30_TICKER,
     time_interval="1Min",
     drl_lib="elegantrl",
-    agent="ppo",
+    agent="td3",
     cwd="./papertrading_erl_retrain",
     net_dim=ERL_PARAMS["net_dimension"],
     state_dim=state_dim,
@@ -154,8 +194,10 @@ paper_trading_erl = PaperTradingAlpaca(
     turbulence_thresh=30,
     max_stock=1e2,
 )
+print('end of paper_trading_erl')
 
 paper_trading_erl.run()
+print('end of paper_trading_erl.run()')
 
 # Check Portfolio Performance
 # ## Get cumulative return

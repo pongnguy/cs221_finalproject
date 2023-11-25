@@ -1,0 +1,4 @@
+# excludes all files/directories
+*Dockerfile
+*docker-compose.yml
+datasets

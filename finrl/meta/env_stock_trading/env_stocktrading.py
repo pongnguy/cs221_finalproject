@@ -101,9 +101,7 @@ class StockTradingEnv(gym.Env):
 
     def _sell_stock(self, index, action):
         def _do_sell_normal():
-            if (
-                self.state[index + 2 * self.stock_dim + 1] != True
-            ):  # check if the stock is able to sell, for simlicity we just add it in techical index
+            if (self.state[index + 2 * self.stock_dim + 1] != True):  # check if the stock is able to sell, for simlicity we just add it in techical index
                 # if self.state[index + 1] > 0: # if we use price<0 to denote a stock is unable to trade in that day, the total asset calculation may be wrong for the price is unreasonable
                 # Sell only if the price is > 0 (no missing data in this particular date)
                 # perform sell action based on the sign of the action
@@ -120,6 +118,8 @@ class StockTradingEnv(gym.Env):
                     # update balance
                     self.state[0] += sell_amount
 
+                    # Alfred decrement number of shares held in the state for the stock
+                    # Alfred if pairs of stock, decrement one and increment another one
                     self.state[index + self.stock_dim + 1] -= sell_num_shares
                     self.cost += (
                         self.state[index + 1]
@@ -187,8 +187,10 @@ class StockTradingEnv(gym.Env):
                     * buy_num_shares
                     * (1 + self.buy_cost_pct[index])
                 )
+                # Alfred first state value is cash on hand?
                 self.state[0] -= buy_amount
 
+                # Alfred another state value gives how many shares
                 self.state[index + self.stock_dim + 1] += buy_num_shares
 
                 self.cost += (
@@ -219,6 +221,7 @@ class StockTradingEnv(gym.Env):
 
     def step(self, actions):
         self.terminal = self.day >= len(self.df.index.unique()) - 1
+        # Alfred change this section so that "selling" a pair will short one and buy the other, and vice versa
         if self.terminal:
             # print(f"Episode: {self.episode}")
             if self.make_plots:
@@ -313,13 +316,32 @@ class StockTradingEnv(gym.Env):
             )
             # print("begin_total_asset:{}".format(begin_total_asset))
 
-            argsort_actions = np.argsort(actions)
-            sell_index = argsort_actions[: np.where(actions < 0)[0].shape[0]]
-            buy_index = argsort_actions[::-1][: np.where(actions > 0)[0].shape[0]]
+            # Alfred fold over pairs buy/sell into individual stock buy/sell
+            # Alfred set pairs to desired pairs, and buy/sell in units of the average stock price
+            import statistics
+            index_pair00 = 0
+            index_pair01 = 1
+            average_price0 = statistics.mean({self.state[index_pair00 + 1], self.state[index_pair01 + 1]})
+            actions[index_pair00] += actions[self.stock_dim] * (average_price0 / self.state[index_pair00 + 1])
+            actions[index_pair01] -= actions[self.stock_dim] * (average_price0 / self.state[index_pair01 + 1])
+            index_pair10 = 2
+            index_pair11 = 3
+            average_price1 = statistics.mean({self.state[index_pair10 + 1], self.state[index_pair11 + 1]})
+            actions[index_pair10] += actions[self.stock_dim+1] * (average_price1 / self.state[index_pair10 + 1])
+            actions[index_pair11] -= actions[self.stock_dim+1] * (average_price1 / self.state[index_pair11 + 1])
+            argsort_actions = np.argsort(actions[0:self.stock_dim])
+            # Alfred sell if action < 0, buy > 0, hold if =0
+            sell_index = argsort_actions[: np.where(actions[0:self.stock_dim] < 0)[0].shape[0]]
+            buy_index = argsort_actions[::-1][: np.where(actions[0:self.stock_dim] > 0)[0].shape[0]]
+            # Alfred add pairs actions to sell and buy indices
+            #argsort_actions_pairs = np.argsort(actions[self.stock_dim:])
+            #sell_index_pairs = argsort_actions_pairs[: np.where(actions[self.stock_dim:] < 0)[0].shape[0]]
+            #buy_index_pairs = argsort_actions_pairs[::-1][: np.where(actions[self.stock_dim:] > 0)[0].shape[0]]
 
             for index in sell_index:
                 # print(f"Num shares before: {self.state[index+self.stock_dim+1]}")
                 # print(f'take sell action before : {actions[index]}')
+                # Alfred sell the stock if instructed by action
                 actions[index] = self._sell_stock(index, actions[index]) * (-1)
                 # print(f'take sell action after : {actions[index]}')
                 # print(f"Num shares after: {self.state[index+self.stock_dim+1]}")
@@ -328,7 +350,8 @@ class StockTradingEnv(gym.Env):
                 # print('take buy action: {}'.format(actions[index]))
                 actions[index] = self._buy_stock(index, actions[index])
 
-            self.actions_memory.append(actions)
+            # Alfred debugging, probably correct since resulting actions are not from pairs directly since they get mapped to individual stocks
+            self.actions_memory.append(actions[0:self.stock_dim])
 
             # state: s -> s+1
             self.day += 1
@@ -340,12 +363,14 @@ class StockTradingEnv(gym.Env):
                     self.turbulence = self.data[self.risk_indicator_col].values[0]
             self.state = self._update_state()
 
+            # Alfred state is position in stocks, and price of stocks
             end_total_asset = self.state[0] + sum(
                 np.array(self.state[1 : (self.stock_dim + 1)])
                 * np.array(self.state[(self.stock_dim + 1) : (self.stock_dim * 2 + 1)])
             )
             self.asset_memory.append(end_total_asset)
             self.date_memory.append(self._get_date())
+            # Alfred reward is increased total asset from one day to the next
             self.reward = end_total_asset - begin_total_asset
             self.rewards_memory.append(self.reward)
             self.reward = self.reward * self.reward_scaling

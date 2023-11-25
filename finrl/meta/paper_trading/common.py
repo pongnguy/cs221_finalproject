@@ -142,7 +142,7 @@ class Config:
 
 def get_gym_env_args(env, if_print: bool) -> dict:
     if {"unwrapped", "observation_space", "action_space", "spec"}.issubset(
-        dir(env)
+            dir(env)
     ):  # isinstance(env, gym.Env):
         env_name = env.unwrapped.spec.id
         state_shape = env.observation_space.shape
@@ -154,7 +154,7 @@ def get_gym_env_args(env, if_print: bool) -> dict:
         if if_discrete:  # make sure it is discrete action space
             action_dim = env.action_space.n
         elif isinstance(
-            env.action_space, gym.spaces.Box
+                env.action_space, gym.spaces.Box
         ):  # make sure it is continuous action space
             action_dim = env.action_space.shape[0]
 
@@ -189,12 +189,12 @@ def build_env(env_class=None, env_args=None):
 
 class AgentBase:
     def __init__(
-        self,
-        net_dims: [int],
-        state_dim: int,
-        action_dim: int,
-        gpu_id: int = 0,
-        args: Config = Config(),
+            self,
+            net_dims: [int],
+            state_dim: int,
+            action_dim: int,
+            gpu_id: int = 0,
+            args: Config = Config(),
     ):
         self.state_dim = state_dim
         self.action_dim = action_dim
@@ -238,7 +238,7 @@ class AgentBase:
 
     @staticmethod
     def soft_update(
-        target_net: torch.nn.Module, current_net: torch.nn.Module, tau: float
+            target_net: torch.nn.Module, current_net: torch.nn.Module, tau: float
     ):
         for tar, cur in zip(target_net.parameters(), current_net.parameters()):
             tar.data.copy_(cur.data * tau + tar.data * (1.0 - tau))
@@ -246,12 +246,12 @@ class AgentBase:
 
 class AgentPPO(AgentBase):
     def __init__(
-        self,
-        net_dims: [int],
-        state_dim: int,
-        action_dim: int,
-        gpu_id: int = 0,
-        args: Config = Config(),
+            self,
+            net_dims: [int],
+            state_dim: int,
+            action_dim: int,
+            gpu_id: int = 0,
+            args: Config = Config(),
     ):
         self.if_off_policy = False
         self.act_class = getattr(self, "act_class", ActorPPO)
@@ -287,13 +287,15 @@ class AgentPPO(AgentBase):
         get_action = self.act.get_action
         convert = self.act.convert_action_for_env
         for i in range(horizon_len):
+            # print(f"ar_state: {type(ary_state)}")
             state = torch.as_tensor(ary_state, dtype=torch.float32, device=self.device)
             action, logprob = (t.squeeze(0) for t in get_action(state.unsqueeze(0))[:2])
 
             ary_action = convert(action).detach().cpu().numpy()
-            ary_state, reward, done, _ = env.step(ary_action)
+            ary_state, reward, done, extra, _ = env.step(ary_action)
+            # print(f'Unpacking Values: done: {done}, extra: {extra}')
             if done:
-                ary_state = env.reset()
+                ary_state = env.reset()[0]
 
             states[i] = state
             actions[i] = action
@@ -325,7 +327,7 @@ class AgentPPO(AgentBase):
             del rewards, undones, values
 
             advantages = (advantages - advantages.mean()) / (
-                advantages.std(dim=0) + 1e-5
+                    advantages.std(dim=0) + 1e-5
             )
         assert logprobs.shape == advantages.shape == reward_sums.shape == (buffer_size,)
 
@@ -368,7 +370,7 @@ class AgentPPO(AgentBase):
         return obj_critics / update_times, obj_actors / update_times, a_std_log.item()
 
     def get_advantages(
-        self, rewards: Tensor, undones: Tensor, values: Tensor
+            self, rewards: Tensor, undones: Tensor, values: Tensor
     ) -> Tensor:
         advantages = torch.empty_like(values)  # advantage value
 
@@ -382,7 +384,153 @@ class AgentPPO(AgentBase):
         for t in range(horizon_len - 1, -1, -1):
             delta = rewards[t] + masks[t] * next_value - values[t]
             advantages[t] = advantage = (
-                delta + masks[t] * self.lambda_gae_adv * advantage
+                    delta + masks[t] * self.lambda_gae_adv * advantage
+            )
+            next_value = values[t]
+        return advantages
+
+# TODO Alfred WIP
+class AgentTD3(AgentBase):
+    def __init__(
+            self,
+            net_dims: [int],
+            state_dim: int,
+            action_dim: int,
+            gpu_id: int = 0,
+            args: Config = Config(),
+    ):
+        self.if_off_policy = True
+        self.act_class = getattr(self, "act_class", ActorPPO)
+        self.cri_class = getattr(self, "cri_class", CriticPPO)
+        AgentBase.__init__(self, net_dims, state_dim, action_dim, gpu_id, args)
+
+        self.ratio_clip = getattr(
+            args, "ratio_clip", 0.25
+        )  # `ratio.clamp(1 - clip, 1 + clip)`
+        self.lambda_gae_adv = getattr(
+            args, "lambda_gae_adv", 0.95
+        )  # could be 0.80~0.99
+        self.lambda_entropy = getattr(
+            args, "lambda_entropy", 0.01
+        )  # could be 0.00~0.10
+        self.lambda_entropy = torch.tensor(
+            self.lambda_entropy, dtype=torch.float32, device=self.device
+        )
+
+    def explore_env(self, env, horizon_len: int) -> [Tensor]:
+        states = torch.zeros((horizon_len, self.state_dim), dtype=torch.float32).to(
+            self.device
+        )
+        actions = torch.zeros((horizon_len, self.action_dim), dtype=torch.float32).to(
+            self.device
+        )
+        logprobs = torch.zeros(horizon_len, dtype=torch.float32).to(self.device)
+        rewards = torch.zeros(horizon_len, dtype=torch.float32).to(self.device)
+        dones = torch.zeros(horizon_len, dtype=torch.bool).to(self.device)
+
+        ary_state = self.states[0]
+
+        get_action = self.act.get_action
+        convert = self.act.convert_action_for_env
+        for i in range(horizon_len):
+            # print(f"ar_state: {type(ary_state)}")
+            state = torch.as_tensor(ary_state, dtype=torch.float32, device=self.device)
+            action, logprob = (t.squeeze(0) for t in get_action(state.unsqueeze(0))[:2])
+
+            ary_action = convert(action).detach().cpu().numpy()
+            ary_state, reward, done, extra, _ = env.step(ary_action)
+            # print(f'Unpacking Values: done: {done}, extra: {extra}')
+            if done:
+                ary_state = env.reset()[0]
+
+            states[i] = state
+            actions[i] = action
+            logprobs[i] = logprob
+            rewards[i] = reward
+            dones[i] = done
+
+        self.states[0] = ary_state
+        rewards = (rewards * self.reward_scale).unsqueeze(1)
+        undones = (1 - dones.type(torch.float32)).unsqueeze(1)
+        return states, actions, logprobs, rewards, undones
+
+    def update_net(self, buffer) -> [float]:
+        with torch.no_grad():
+            states, actions, logprobs, rewards, undones = buffer
+            buffer_size = states.shape[0]
+
+            """get advantages reward_sums"""
+            bs = 2**10  # set a smaller 'batch_size' when out of GPU memory.
+            values = [self.cri(states[i : i + bs]) for i in range(0, buffer_size, bs)]
+            values = torch.cat(values, dim=0).squeeze(
+                1
+            )  # values.shape == (buffer_size, )
+
+            advantages = self.get_advantages(
+                rewards, undones, values
+            )  # advantages.shape == (buffer_size, )
+            reward_sums = advantages + values  # reward_sums.shape == (buffer_size, )
+            del rewards, undones, values
+
+            advantages = (advantages - advantages.mean()) / (
+                    advantages.std(dim=0) + 1e-5
+            )
+        assert logprobs.shape == advantages.shape == reward_sums.shape == (buffer_size,)
+
+        """update network"""
+        obj_critics = 0.0
+        obj_actors = 0.0
+
+        update_times = int(buffer_size * self.repeat_times / self.batch_size)
+        assert update_times >= 1
+        for _ in range(update_times):
+            indices = torch.randint(
+                buffer_size, size=(self.batch_size,), requires_grad=False
+            )
+            state = states[indices]
+            action = actions[indices]
+            logprob = logprobs[indices]
+            advantage = advantages[indices]
+            reward_sum = reward_sums[indices]
+
+            value = self.cri(state).squeeze(
+                1
+            )  # critic network predicts the reward_sum (Q value) of state
+            obj_critic = self.criterion(value, reward_sum)
+            self.optimizer_update(self.cri_optimizer, obj_critic)
+
+            new_logprob, obj_entropy = self.act.get_logprob_entropy(state, action)
+            ratio = (new_logprob - logprob.detach()).exp()
+            surrogate1 = advantage * ratio
+            surrogate2 = advantage * ratio.clamp(
+                1 - self.ratio_clip, 1 + self.ratio_clip
+            )
+            obj_surrogate = torch.min(surrogate1, surrogate2).mean()
+
+            obj_actor = obj_surrogate + obj_entropy.mean() * self.lambda_entropy
+            self.optimizer_update(self.act_optimizer, -obj_actor)
+
+            obj_critics += obj_critic.item()
+            obj_actors += obj_actor.item()
+        a_std_log = getattr(self.act, "a_std_log", torch.zeros(1)).mean()
+        return obj_critics / update_times, obj_actors / update_times, a_std_log.item()
+
+    def get_advantages(
+            self, rewards: Tensor, undones: Tensor, values: Tensor
+    ) -> Tensor:
+        advantages = torch.empty_like(values)  # advantage value
+
+        masks = undones * self.gamma
+        horizon_len = rewards.shape[0]
+
+        next_state = torch.tensor(self.states, dtype=torch.float32).to(self.device)
+        next_value = self.cri(next_state).detach()[0, 0]
+
+        advantage = 0  # last_gae_lambda
+        for t in range(horizon_len - 1, -1, -1):
+            delta = rewards[t] + masks[t] * next_value - values[t]
+            advantages[t] = advantage = (
+                    delta + masks[t] * self.lambda_gae_adv * advantage
             )
             next_value = values[t]
         return advantages
@@ -401,15 +549,15 @@ class PendulumEnv(gym.Wrapper):  # a demo of custom gym env
         self.if_discrete = False  # discrete action or continuous action
 
     def reset(
-        self,
-        *,
-        seed=None,
-        options=None,
+            self,
+            *,
+            seed=None,
+            options=None,
     ) -> np.ndarray:  # reset the agent in env
-        return self.env.reset()
+        return self.env.reset()[0][np.newaxis, :]
 
     def step(
-        self, action: np.ndarray
+            self, action: np.ndarray
     ) -> (np.ndarray, float, bool, dict):  # agent interacts in env
         # We suggest that adjust action space to (-1, +1) when designing a custom env.
         state, reward, done, info_dict = self.env.step(action * 2)
@@ -423,9 +571,7 @@ def train_agent(args: Config):
     agent = args.agent_class(
         args.net_dims, args.state_dim, args.action_dim, gpu_id=args.gpu_id, args=args
     )
-    # TODO Alfred this produced an error
-    agent.states = env.reset()[0]
-    #agent.states = env.reset()[np.newaxis, :]
+    agent.states = env.reset()[0][np.newaxis, :]
 
     evaluator = Evaluator(
         eval_env=build_env(args.env_class, args.env_args),
@@ -443,19 +589,19 @@ def train_agent(args: Config):
 
         evaluator.evaluate_and_save(agent.act, args.horizon_len, logging_tuple)
         if (evaluator.total_step > args.break_step) or os.path.exists(
-            f"{args.cwd}/stop"
+                f"{args.cwd}/stop"
         ):
             torch.save(agent.act.state_dict(), args.cwd + "/actor.pth")
             break  # stop training when reach `break_step` or `mkdir cwd/stop`
 
 
 def render_agent(
-    env_class,
-    env_args: dict,
-    net_dims: [int],
-    agent_class,
-    actor_path: str,
-    render_times: int = 8,
+        env_class,
+        env_args: dict,
+        net_dims: [int],
+        agent_class,
+        actor_path: str,
+        render_times: int = 8,
 ):
     env = build_env(env_class, env_args)
 
@@ -479,7 +625,7 @@ def render_agent(
 
 class Evaluator:
     def __init__(
-        self, eval_env, eval_per_step: int = 1e4, eval_times: int = 8, cwd: str = "."
+            self, eval_env, eval_per_step: int = 1e4, eval_times: int = 8, cwd: str = "."
     ):
         self.cwd = cwd
         self.env_eval = eval_env
@@ -528,11 +674,11 @@ class Evaluator:
 
 
 def get_rewards_and_steps(
-    env, actor, if_render: bool = False
+        env, actor, if_render: bool = False
 ) -> (float, int):  # cumulative_rewards and episode_steps
     device = next(actor.parameters()).device  # net.parameters() is a Python generator.
 
-    state = env.reset()
+    state = env.reset()[0]
     episode_steps = 0
     cumulative_returns = 0.0  # sum of rewards in an episode
     for episode_steps in range(12345):
@@ -543,7 +689,7 @@ def get_rewards_and_steps(
         action = (
             tensor_action.detach().cpu().numpy()[0]
         )  # not need detach(), because using torch.no_grad() outside
-        state, reward, done, _ = env.step(action)
+        state, reward, done, extra, _ = env.step(action)
         cumulative_returns += reward
 
         if if_render:
@@ -659,23 +805,27 @@ class DRLAgent:
 
         # test on the testing env
         _torch = torch
-        state = environment.reset()
+        state = environment.reset()[0]
         episode_returns = []  # the cumulative_return / initial_account
+        # Alfred set the initial total assets
         episode_total_assets = [environment.initial_total_asset]
         with _torch.no_grad():
+            # Alfred loop through until max_steps
             for i in range(environment.max_step):
-                s_tensor = _torch.as_tensor((state,), device=device)
+                # state =     torch.as_tensor(ary_state, dtype=torch.float32, device=self.device)
+                s_tensor = _torch.as_tensor((state,), dtype=torch.float32, device=device)
                 a_tensor = act(s_tensor)  # action_tanh = act.forward()
                 action = (
                     a_tensor.detach().cpu().numpy()[0]
                 )  # not need detach(), because with torch.no_grad() outside
-                state, reward, done, _ = environment.step(action)
+                # Alfred environment.amount changes at this step
+                state, reward, done, extra, _ = environment.step(action)
 
                 total_asset = (
-                    environment.amount
-                    + (
-                        environment.price_ary[environment.day] * environment.stocks
-                    ).sum()
+                        environment.amount
+                        + (
+                                environment.price_ary[environment.day] * environment.stocks
+                        ).sum()
                 )
                 episode_total_assets.append(total_asset)
                 episode_return = total_asset / environment.initial_total_asset
@@ -704,17 +854,17 @@ from finrl.meta.data_processor import DataProcessor
 
 
 def train(
-    start_date,
-    end_date,
-    ticker_list,
-    data_source,
-    time_interval,
-    technical_indicator_list,
-    drl_lib,
-    env,
-    model_name,
-    if_vix=True,
-    **kwargs,
+        start_date,
+        end_date,
+        ticker_list,
+        data_source,
+        time_interval,
+        technical_indicator_list,
+        drl_lib,
+        env,
+        model_name,
+        if_vix=True,
+        **kwargs,
 ):
     # download data
     dp = DataProcessor(data_source, **kwargs)
@@ -763,17 +913,17 @@ from finrl.config_tickers import DOW_30_TICKER
 
 
 def test(
-    start_date,
-    end_date,
-    ticker_list,
-    data_source,
-    time_interval,
-    technical_indicator_list,
-    drl_lib,
-    env,
-    model_name,
-    if_vix=True,
-    **kwargs,
+        start_date,
+        end_date,
+        ticker_list,
+        data_source,
+        time_interval,
+        technical_indicator_list,
+        drl_lib,
+        env,
+        model_name,
+        if_vix=True,
+        **kwargs,
 ):
     # import data processor
     from finrl.meta.data_processor import DataProcessor
@@ -846,9 +996,9 @@ def alpaca_history(key, secret, url, start, end):
     trading_days = get_trading_days(start, end)
     df = pd.DataFrame()
     for day in trading_days:
-        df = df.append(
-            api.get_portfolio_history(date_start=day, timeframe="5Min").df.iloc[:78]
-        )
+        #df = df.append(
+        new_row = api.get_portfolio_history(date_start=day, timeframe="1D").df.iloc[:78]
+        df = pd.concat([df, pd.DataFrame(new_row)], ignore_index=True)
     equities = df.equity.values
     cumu_returns = equities / equities[0]
     cumu_returns = cumu_returns[~np.isnan(cumu_returns)]

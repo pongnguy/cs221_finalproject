@@ -72,7 +72,7 @@ class YahooFinanceProcessor:
             "90Min",
         ]:
             time_interval = time_interval.replace("Min", "m")
-        elif time_interval in ["1H", "1D", "5D"]:
+        elif time_interval in ["1H", "1D", "1d", "5D"]:
             time_interval = time_interval.lower()
         elif time_interval == "1W":
             time_interval = "1wk"

@@ -19,6 +19,13 @@ TRADE_END_DATE = "2021-12-01"
 # stockstats technical indicator column names
 # check https://pypi.org/project/stockstats/ for different names
 INDICATORS = [
+    "corcoeff_5_AAPL",
+    "corcoeff_5_AMGN",
+    "corcoeff_5_AXP",
+    "corcoeff_5_BA",
+    "alfred1",
+    "alfred2",
+    "alfred3",
     "macd",
     "boll_ub",
     "boll_lb",

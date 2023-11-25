@@ -138,7 +138,7 @@ dmypy.json
 .idea
 
 *events.out.tfevents.*
-*.csv
+#*.csv
 *.zip
 *.png
 finrl_test.py
@@ -147,3 +147,6 @@ papertrading_test.py
 alpaca_processor_test.py
 /finrl/config_private.py
 .history/
+
+# directory having stock data
+datasets

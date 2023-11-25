@@ -30,6 +30,9 @@ class DataProcessor:
         elif data_source == "yahoofinance":
             self.processor = YahooFinance(start_date, end_date, time_interval)
 
+        elif data_source == "local":
+            self.processor = Local()
+
         else:
             raise ValueError("Data source input is NOT supported yet.")
 

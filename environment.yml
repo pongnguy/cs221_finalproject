@@ -1,0 +1,14 @@
+name: FinRL3
+channels:
+  - conda-forge
+  - nvidia
+  - pytorch
+dependencies:
+  - pytorch-gpu
+  - pytorch-cuda
+  - cudatoolkit
+  - jupyterlab
+  - jupyter
+  #- pip
+  #- pip:
+  #    - -r requirements.txt

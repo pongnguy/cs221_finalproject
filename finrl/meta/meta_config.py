@@ -13,6 +13,7 @@ PATH_OF_DATA = "data"
 READ_DATA_FROM_LOCAL = 1  # 0 or 1
 
 INDICATORS = [
+    "purple",
     "macd",
     "boll_ub",
     "boll_lb",
