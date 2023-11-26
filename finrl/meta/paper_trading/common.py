@@ -25,24 +25,11 @@ from finrl.plot import backtest_stats
 from finrl.plot import get_baseline
 from finrl.plot import get_daily_return
 
+from finrl.meta.paper_trading.utilities import memoize
 
 class HashableDict(dict):
     def __hash__(self):
         return hash(frozenset(self.items()))
-
-import diskcache as dc
-
-def memoize(func):
-    cache = dc.Cache('diskcache')
-
-    def memoized_func(**kwargs):
-        if kwargs in cache:
-            return cache[kwargs]
-        result = func(**kwargs)
-        cache[kwargs] = result
-        return result
-
-    return memoized_func
 
 # -----------------------------------------------------------------------------------------------------------------------------------------
 # PPO
