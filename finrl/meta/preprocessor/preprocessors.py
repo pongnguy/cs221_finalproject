@@ -75,7 +75,6 @@ class FeatureEngineer:
         self.use_turbulence = use_turbulence
         self.user_defined_feature = user_defined_feature
 
-    @memoize
     def preprocess_data(self, df):
         """main method to do the feature engineering
         @:param config: source dataframe

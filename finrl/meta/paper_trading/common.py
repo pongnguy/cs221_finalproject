@@ -862,7 +862,7 @@ import functools
 
 # construct environment
 
-
+@memoize(isMethod=False)
 def train(
         start_date,
         end_date,
@@ -877,16 +877,15 @@ def train(
         if_vix=True,
         **kwargs,
 ):
-    # TODO Alfred implement this with diskcache to store the results
-
-    dp = DataProcessor(data_source, **kwargs)
+    dp = DataProcessor(data_source, tech_indicator=technical_indicator_list, **kwargs)
     data = dp.download_data(ticker_list, start_date, end_date, time_interval)
-    data = dp.clean_data(data)
+    # Alfred need time_interval in the signature for memoization, otherwise will cause error
+    data = dp.clean_data(data, start_date, end_date)
     data = dp.add_technical_indicator(data, technical_indicator_list)
 
 
     if if_vix:
-        data = dp.add_vix(data)
+        data = dp.add_vix(data, start_date, end_date, time_interval)
     else:
         data = dp.add_turbulence(data)
     price_array, tech_array, turbulence_array = dp.df_to_array(data, if_vix)
@@ -927,7 +926,6 @@ from finrl.config import TEST_START_DATE
 from finrl.config_tickers import DOW_30_TICKER
 
 
-@memoize
 def test(
         start_date,
         end_date,
@@ -945,13 +943,13 @@ def test(
     from finrl.meta.data_processor import DataProcessor
 
     # fetch data
-    dp = DataProcessor(data_source, **kwargs)
+    dp = DataProcessor(data_source, tech_indicator=technical_indicator_list, **kwargs)
     data = dp.download_data(ticker_list, start_date, end_date, time_interval)
-    data = dp.clean_data(data)
+    data = dp.clean_data(data, start_date, end_date)
     data = dp.add_technical_indicator(data, technical_indicator_list)
 
     if if_vix:
-        data = dp.add_vix(data)
+        data = dp.add_vix(data, start_date, end_date, time_interval)
     else:
         data = dp.add_turbulence(data)
     price_array, tech_array, turbulence_array = dp.df_to_array(data, if_vix)

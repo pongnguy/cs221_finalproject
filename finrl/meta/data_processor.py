@@ -39,10 +39,11 @@ class DataProcessor:
             raise ValueError("Data source input is NOT supported yet.")
 
         # Initialize variable in case it is using cache and does not use download_data() method
-        self.tech_indicator_list = tech_indicator
+        self.tech_indicator_list = list(tech_indicator)
         self.vix = vix
 
 
+    @memoize(isMethod=True)
     def download_data(
         self, ticker_list, start_date, end_date, time_interval
     ) -> pd.DataFrame:
@@ -54,36 +55,37 @@ class DataProcessor:
         )
         return df
 
-    def clean_data(self, df) -> pd.DataFrame:
-        df = self.processor.clean_data(df)
+    @memoize(isMethod=True)
+    def clean_data(self, df, start, end) -> pd.DataFrame:
+        df = self.processor.clean_data(df, start, end)
 
         return df
 
+    @memoize(isMethod=True)
     def add_technical_indicator(self, df, tech_indicator_list) -> pd.DataFrame:
         self.tech_indicator_list = tech_indicator_list
         df = self.processor.add_technical_indicator(df, tech_indicator_list)
 
         return df
 
+    @memoize(isMethod=True)
     def add_turbulence(self, df) -> pd.DataFrame:
         df = self.processor.add_turbulence(df)
 
         return df
 
-    def add_vix(self, df) -> pd.DataFrame:
-        df = self.processor.add_vix(df)
+    @memoize(isMethod=True)
+    def add_vix(self, df, start, end, time_interval) -> pd.DataFrame:
+        df = self.processor.add_vix(df, start, end, time_interval)
 
         return df
 
+    @memoize(isMethod=True)
     def add_turbulence(self, df) -> pd.DataFrame:
         df = self.processor.add_turbulence(df)
 
         return df
 
-    def add_vix(self, df) -> pd.DataFrame:
-        df = self.processor.add_vix(df)
-
-        return df
 
     def add_vixor(self, df) -> pd.DataFrame:
         df = self.processor.add_vixor(df)

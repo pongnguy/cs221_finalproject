@@ -98,7 +98,7 @@ train(
     end_date=TRAIN_END_DATE,
     ticker_list=tuple(ticker_list),
     data_source="alpaca",
-    time_interval="1Min",
+    time_interval="1D",
     technical_indicator_list=tuple(INDICATORS),
     drl_lib="elegantrl",
     env=env,
@@ -156,7 +156,7 @@ train(
     end_date=TRAINFULL_END_DATE,
     ticker_list=tuple(ticker_list),
     data_source="alpaca",
-    time_interval="1Min",
+    time_interval="1D",
     technical_indicator_list=tuple(INDICATORS),
     drl_lib="elegantrl",
     env=env,
@@ -203,7 +203,7 @@ paper_trading_erl = PaperTradingAlpaca(
 )
 print('end of paper_trading_erl')
 
-paper_trading_erl.run()
+#paper_trading_erl.run()
 print('end of paper_trading_erl.run()')
 
 # Check Portfolio Performance

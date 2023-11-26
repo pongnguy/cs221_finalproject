@@ -33,7 +33,7 @@ class AlpacaProcessor:
         bars["symbol"] = ticker
         return bars
 
-    @memoize
+
     def download_data(
         self, ticker_list, start_date, end_date, time_interval
     ) -> pd.DataFrame:
@@ -58,7 +58,7 @@ class AlpacaProcessor:
         end_date = pd.Timestamp(end_date + " 15:59:00", tz=NY)
 
         # Use ThreadPoolExecutor to fetch data for multiple tickers concurrently
-        with ThreadPoolExecutor(max_workers=10) as executor:
+        with ThreadPoolExecutor(max_workers=1) as executor:
             futures = [
                 executor.submit(
                     self._fetch_data_for_ticker,
@@ -100,6 +100,7 @@ class AlpacaProcessor:
         tmp_df = pd.DataFrame(index=times)
         tic_df = df[df.tic == tic].set_index("timestamp")
 
+        # Alfred causing error trying to merge minute data with daily data
         # Step 1: Merging dataframes to avoid loop
         tmp_df = tmp_df.merge(
             tic_df[["open", "high", "low", "close", "volume"]],
@@ -138,7 +139,7 @@ class AlpacaProcessor:
 
         return tmp_df
 
-    def clean_data(self, df):
+    def clean_data(self, df, start, end):
         print("Data cleaning started")
         tic_list = np.unique(df.tic.values)
         n_tickers = len(tic_list)
@@ -150,7 +151,7 @@ class AlpacaProcessor:
 
         # ... (generating 'times' series, same as in your existing code)
 
-        trading_days = self.get_trading_days(start=self.start, end=self.end)
+        trading_days = self.get_trading_days(start=start, end=end)
 
         # produce full timestamp index
         print("produce full timestamp index")
@@ -247,13 +248,13 @@ class AlpacaProcessor:
         return df
 
     # Allows to multithread the add_vix function for quicker execution
-    def download_and_clean_data(self):
-        vix_df = self.download_data(["VIXY"], self.start, self.end, self.time_interval)
+    def download_and_clean_data(self, start, end, time_interval):
+        vix_df = self.download_data(["VIXY"], start, end, time_interval)
         return self.clean_data(vix_df)
 
-    def add_vix(self, data):
+    def add_vix(self, data, start, end, time_interval):
         with ThreadPoolExecutor() as executor:
-            future = executor.submit(self.download_and_clean_data)
+            future = executor.submit(self.download_and_clean_data, start, end, time_interval)
             cleaned_vix = future.result()
 
         vix = cleaned_vix[["timestamp", "close"]]

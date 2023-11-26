@@ -25,7 +25,7 @@ def memoize(isMethod):
             if i == 0 and isMethod:
                 key.append(str(type(value)))
             else:
-                if hasattr(i, '__class__'):
+                if hasattr(value, '__class__'):
                     match str(type(value)):
                         case "<class 'list'>":
                             key.append(value)
@@ -33,9 +33,29 @@ def memoize(isMethod):
                             pandas_hash = int(hashlib.sha256(pandas.core.util.hashing.hash_pandas_object(value, index=True).values).hexdigest(), 16)
                             key.append(pandas_hash)
                         case _:
-                            key.append(hash(i))
+                            key.append(hash(value))
                 else:
-                    key.append(hash(i))
+                    key.append(hash(value))
+
+        for k in kwargs:
+            value = kwargs[k]
+            a = str(type(value))
+            #key.append(hash(i))
+            # Alfred hack to account for self parameter when instantiating a class method
+            #if i == 0 and isMethod:
+            #    key.append(str(type(value)))
+            #else:
+            if hasattr(value, '__class__'):
+                match str(type(value)):
+                    case "<class 'list'>":
+                        key.append(value)
+                    case "<class 'pandas.core.frame.DataFrame'>":
+                        pandas_hash = int(hashlib.sha256(pandas.core.util.hashing.hash_pandas_object(value, index=True).values).hexdigest(), 16)
+                        key.append(pandas_hash)
+                    case _:
+                        key.append(hash(value))
+            else:
+                key.append(hash(value))
             #    class_name = str(i.__class__)
             #    if class_name == 'pandas.core.frame.DataFrame':
             #        key.append(hash(i))
@@ -43,6 +63,7 @@ def memoize(isMethod):
             #        key.append(class_name)
             #else:
             #    key.append(i)
+
         return key
         #return (args[0].__class__, args[1:], kwargs)
 

@@ -34,7 +34,7 @@ class YahooDownloader:
         self.end_date = end_date
         self.ticker_list = ticker_list
 
-    @memoize
+    @memoize(isMethod=True)
     def fetch_data(self, proxy=None) -> pd.DataFrame:
         """Fetches data from Yahoo API
         Parameters
