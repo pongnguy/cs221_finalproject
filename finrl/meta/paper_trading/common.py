@@ -761,6 +761,7 @@ class DRLAgent:
         model = Config(agent_class=agent, env_class=self.env, env_args=env_args)
         model.if_off_policy = model_name in OFF_POLICY_MODELS
         if model_kwargs is not None:
+            #model_kwargs = {k: v for v, k in enumerate(model_kwargs)}
             try:
                 model.learning_rate = model_kwargs["learning_rate"]
                 model.batch_size = model_kwargs["batch_size"]
@@ -809,6 +810,7 @@ class DRLAgent:
         episode_returns = []  # the cumulative_return / initial_account
         # Alfred set the initial total assets
         episode_total_assets = [environment.initial_total_asset]
+        dates = [environment.day]
         with _torch.no_grad():
             # Alfred loop through until max_steps
             for i in range(environment.max_step):
@@ -828,6 +830,7 @@ class DRLAgent:
                         ).sum()
                 )
                 episode_total_assets.append(total_asset)
+                dates.append(environment.day)
                 episode_return = total_asset / environment.initial_total_asset
                 episode_returns.append(episode_return)
                 if done:
@@ -835,7 +838,7 @@ class DRLAgent:
         print("Test Finished!")
         # return episode total_assets on testing data
         print("episode_return", episode_return)
-        return episode_total_assets
+        return episode_total_assets, dates
 
 
 # -----------------------------------------------------------------------------------------------------------------------------------------
@@ -850,9 +853,11 @@ from finrl.config import TRAIN_START_DATE
 from finrl.config_tickers import DOW_30_TICKER
 from finrl.meta.data_processor import DataProcessor
 
+import functools
+
 # construct environment
 
-
+@functools.lru_cache(maxsize=128)
 def train(
         start_date,
         end_date,
@@ -863,14 +868,32 @@ def train(
         drl_lib,
         env,
         model_name,
+        erl_params: frozenset,
         if_vix=True,
         **kwargs,
 ):
+    import dill
     # download data
-    dp = DataProcessor(data_source, **kwargs)
-    data = dp.download_data(ticker_list, start_date, end_date, time_interval)
-    data = dp.clean_data(data)
-    data = dp.add_technical_indicator(data, technical_indicator_list)
+    if os.path.isfile('data.pkl'):
+        with open('data.pkl', 'rb') as f:
+            print('load dill data')
+            data = dill.load(f)
+    if os.path.isfile('dp.pkl'):
+        with open('dp.pkl', 'rb') as f:
+            print('load dill dp')
+            dp = dill.load(f)
+    else:
+        dp = DataProcessor(data_source, **kwargs)
+        data = dp.download_data(ticker_list, start_date, end_date, time_interval)
+        data = dp.clean_data(data)
+        data = dp.add_technical_indicator(data, technical_indicator_list)
+        with open('data.pkl', 'wb') as f:
+            print('write dill data')
+            dill.dump(data, f)
+        with open('dp.pkl', 'wb') as f:
+            print('write dill dp')
+            dill.dump(dp, f)
+
     if if_vix:
         data = dp.add_vix(data)
     else:
@@ -887,10 +910,10 @@ def train(
     # read parameters
     cwd = kwargs.get("cwd", "./" + str(model_name))
 
+    erl_params = {k: v for v, k in enumerate(erl_params)} # accepts a frozenset
     if drl_lib == "elegantrl":
         DRLAgent_erl = DRLAgent
         break_step = kwargs.get("break_step", 1e6)
-        erl_params = kwargs.get("erl_params")
         agent = DRLAgent_erl(
             env=env,
             price_array=price_array,
@@ -955,13 +978,13 @@ def test(
 
     if drl_lib == "elegantrl":
         DRLAgent_erl = DRLAgent
-        episode_total_assets = DRLAgent_erl.DRL_prediction(
+        episode_total_assets, dates = DRLAgent_erl.DRL_prediction(
             model_name=model_name,
             cwd=cwd,
             net_dimension=net_dimension,
             environment=env_instance,
         )
-        return episode_total_assets
+        return episode_total_assets, dates, data
 
 
 # -----------------------------------------------------------------------------------------------------------------------------------------

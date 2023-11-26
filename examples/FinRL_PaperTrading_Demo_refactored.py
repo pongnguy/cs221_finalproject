@@ -1,3 +1,4 @@
+#%%
 # Disclaimer: Nothing herein is financial advice, and NOT a recommendation to trade real money. Many platforms exist for simulated trading (paper trading) which can be used for building and developing the methods discussed. Please use common sense and always first consult a professional before trading or investing.
 # install finrl library
 # %pip install --upgrade git+https://github.com/AI4Finance-Foundation/FinRL.git
@@ -5,21 +6,22 @@
 from __future__ import annotations
 
 import argparse
+import functools
 
 parser = argparse.ArgumentParser()
-#parser.add_argument("data_key", help="data source api key")
-#parser.add_argument("data_secret", help="data source api secret")
-#parser.add_argument("data_url", help="data source api base url")
-#parser.add_argument("trading_key", help="trading api key")
-#parser.add_argument("trading_secret", help="trading api secret")
-#parser.add_argument("trading_url", help="trading api base url")
+parser.add_argument("data_key", help="data source api key")
+parser.add_argument("data_secret", help="data source api secret")
+parser.add_argument("data_url", help="data source api base url")
+parser.add_argument("trading_key", help="trading api key")
+parser.add_argument("trading_secret", help="trading api secret")
+parser.add_argument("trading_url", help="trading api base url")
 args = parser.parse_args()
-DATA_API_KEY = 'PKD6CSN42593ZNZFM7ME'
-DATA_API_SECRET = '4cmC7PNor9yfyGMEqpTWJ6z2pwuL8hH7z5Zefntq'
-DATA_API_BASE_URL = 'https://paper-api.alpaca.markets'
-TRADING_API_KEY = 'PKD6CSN42593ZNZFM7ME'
-TRADING_API_SECRET = '4cmC7PNor9yfyGMEqpTWJ6z2pwuL8hH7z5Zefntq'
-TRADING_API_BASE_URL = 'https://paper-api.alpaca.markets'
+DATA_API_KEY = args.data_key
+DATA_API_SECRET = args.data_secret
+DATA_API_BASE_URL = args.data_url
+TRADING_API_KEY = args.trading_key
+TRADING_API_SECRET = args.trading_secret
+TRADING_API_BASE_URL = args.trading_url
 
 print("DATA_API_KEY: ", DATA_API_KEY)
 print("DATA_API_SECRET: ", DATA_API_SECRET)
@@ -84,42 +86,35 @@ print("TEST_END_DATE: ", TEST_END_DATE)
 print("TRAINFULL_START_DATE: ", TRAINFULL_START_DATE)
 print("TRAINFULL_END_DATE: ", TRAINFULL_END_DATE)
 
-
+#%%
+# Alfred train time_interval is set for 1D in order to match the training data
 import dill
 import os
 
-if os.path.isfile('train.pkl'):
-    with open('train.pkl', 'rb') as f:
-        print('load dill train')
-        env = dill.load(f)
-else:
-    # Alfred train time_interval is set for 1D in order to match the training data
-    train(
-        start_date=TRAIN_START_DATE,
-        end_date=TRAIN_END_DATE,
-        ticker_list=ticker_list,
-        data_source="alpaca",
-        time_interval="1D",
-        technical_indicator_list=INDICATORS,
-        drl_lib="elegantrl",
-        env=env,
-        model_name="td3",
-        #model_name="ppo",
-        if_vix=True,
-        API_KEY=DATA_API_KEY,
-        API_SECRET=DATA_API_SECRET,
-        API_BASE_URL=DATA_API_BASE_URL,
-        erl_params=ERL_PARAMS,
-        cwd="./papertrading_erl",  # current_working_dir
-        break_step=1e5,
-    )
-    print('end of train')
-    with open('train.pkl', 'wb') as f:
-        print('write dill')
-        dill.dump(env, f)
+train(
+    start_date=TRAIN_START_DATE,
+    end_date=TRAIN_END_DATE,
+    ticker_list=tuple(ticker_list),
+    data_source="alpaca",
+    time_interval="1Min",
+    technical_indicator_list=tuple(INDICATORS),
+    drl_lib="elegantrl",
+    env=env,
+    model_name="ppo",
+    if_vix=True,
+    API_KEY=DATA_API_KEY,
+    API_SECRET=DATA_API_SECRET,
+    API_BASE_URL=DATA_API_BASE_URL,
+    erl_params=frozenset(ERL_PARAMS),
+    cwd="./papertrading_erl",  # current_working_dir
+    break_step=1e5,
+)
 
+
+
+#%%
 # Alfred test value is less than train time_interval
-account_value_erl = test(
+account_value_erl, dates, data = test(
     start_date=TEST_START_DATE,
     end_date=TEST_END_DATE,
     ticker_list=ticker_list,
@@ -128,7 +123,7 @@ account_value_erl = test(
     technical_indicator_list=INDICATORS,
     drl_lib="elegantrl",
     env=env,
-    model_name="td3",
+    model_name="ppo",
     if_vix=True,
     API_KEY=DATA_API_KEY,
     API_SECRET=DATA_API_SECRET,
@@ -139,39 +134,46 @@ account_value_erl = test(
 
 import numpy as np
 import matplotlib.pyplot as plt
+#dates_str = [(datetime.datetime.strptime(TEST_START_DATE,'%Y-%m-%d') + datetime.timedelta(minutes=i)).strftime('%Y-%m-%d') for i in dates]
 x = np.linspace(1, len(account_value_erl), len(account_value_erl))
 #x = np.arange(np.datetime64(TEST_START_DATE),np.datetime64(TEST_END_DATE), np.timedelta64(1, 'm'))
+# TODO Alfred plot with the correct dates in the x-axis
+#plt.plot(dates_str, account_value_erl)
+#x = data.timestamp.unique()
 plt.plot(x, account_value_erl)
+#plt.text(100,100, f"Dates from {TEST_START_DATE} to {TEST_END_DATE}", fontsize=12)
 #plt.show()
-plt.savefig('fig.png')
+plt.title(f"Dates {TEST_START_DATE} to {TEST_END_DATE}, 1Min", fontsize=12)
+date_stamp = datetime.datetime.now().strftime('%Y-%m-%d_%H%M%S')
+plt.savefig(f'results/alpaca/fig_train_{date_stamp}.png')
 
-if os.path.isfile('trainfull.pkl'):
-    with open('trainfull.pkl', 'rb') as f:
-        print('load dill trainfull')
-        env = dill.load(f)
-else:
-    train(
-        start_date=TRAINFULL_START_DATE,  # After tuning well, retrain on the training and testing sets
-        end_date=TRAINFULL_END_DATE,
-        ticker_list=ticker_list,
-        data_source="alpaca",
-        time_interval="1D",
-        technical_indicator_list=INDICATORS,
-        drl_lib="elegantrl",
-        env=env,
-        model_name="td3",
-        if_vix=True,
-        API_KEY=DATA_API_KEY,
-        API_SECRET=DATA_API_SECRET,
-        API_BASE_URL=DATA_API_BASE_URL,
-        erl_params=ERL_PARAMS,
-        cwd="./papertrading_erl_retrain",
-        break_step=2e5,
-    )
-    print('end of trainfull')
-    with open('trainfull.pkl', 'wb') as f:
-        print('write dill')
-        dill.dump(env, f)
+#%%
+train(
+    start_date=TRAINFULL_START_DATE,  # After tuning well, retrain on the training and testing sets
+    end_date=TRAINFULL_END_DATE,
+    ticker_list=ticker_list,
+    data_source="alpaca",
+    time_interval="1Min",
+    technical_indicator_list=INDICATORS,
+    drl_lib="elegantrl",
+    env=env,
+    model_name="ppo",
+    if_vix=True,
+    API_KEY=DATA_API_KEY,
+    API_SECRET=DATA_API_SECRET,
+    API_BASE_URL=DATA_API_BASE_URL,
+    erl_params=ERL_PARAMS,
+    cwd="./papertrading_erl_retrain",
+    break_step=2e5,
+)
+
+x = np.linspace(1, len(account_value_erl), len(account_value_erl))
+plt.plot(x, account_value_erl)
+plt.title(f"Dates {TEST_START_DATE} to {TEST_END_DATE}, 1Min", fontsize=12)
+date_stamp = datetime.datetime.now().strftime('%Y-%m-%d_%H%M%S')
+plt.savefig(f'results/alpaca/fig_trainfull_{date_stamp}.png')
+
+#%%
 
 action_dim = len(DOW_30_TICKER)
 state_dim = (
@@ -182,7 +184,7 @@ paper_trading_erl = PaperTradingAlpaca(
     ticker_list=DOW_30_TICKER,
     time_interval="1Min",
     drl_lib="elegantrl",
-    agent="td3",
+    agent="ppo",
     cwd="./papertrading_erl_retrain",
     net_dim=ERL_PARAMS["net_dimension"],
     state_dim=state_dim,

@@ -6,6 +6,11 @@ from numpy import random as rd
 
 
 class StockTradingEnv(gym.Env):
+    def __hash__(self):
+        #print(hash(str(self)))
+        # Alfred use the env_name as a simple hash, ignoring all the other parameters
+        return hash(self.env_name)
+
     def __init__(
         self,
         config,
