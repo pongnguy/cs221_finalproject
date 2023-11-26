@@ -6,6 +6,8 @@ from __future__ import annotations
 import pandas as pd
 import yfinance as yf
 
+from finrl.meta.paper_trading.utilities import memoize
+
 
 class YahooDownloader:
     """Provides methods for retrieving daily stock data from
@@ -32,6 +34,7 @@ class YahooDownloader:
         self.end_date = end_date
         self.ticker_list = ticker_list
 
+    @memoize
     def fetch_data(self, proxy=None) -> pd.DataFrame:
         """Fetches data from Yahoo API
         Parameters

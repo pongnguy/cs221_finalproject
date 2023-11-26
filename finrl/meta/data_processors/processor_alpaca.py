@@ -11,6 +11,8 @@ import pytz
 from stockstats import StockDataFrame as Sdf
 
 
+from finrl.meta.paper_trading.utilities import memoize
+
 class AlpacaProcessor:
     def __init__(self, API_KEY=None, API_SECRET=None, API_BASE_URL=None, api=None):
         if api is None:
@@ -31,6 +33,7 @@ class AlpacaProcessor:
         bars["symbol"] = ticker
         return bars
 
+    @memoize
     def download_data(
         self, ticker_list, start_date, end_date, time_interval
     ) -> pd.DataFrame:

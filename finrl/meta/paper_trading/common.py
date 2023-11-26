@@ -862,7 +862,7 @@ import functools
 
 # construct environment
 
-@memoize
+
 def train(
         start_date,
         end_date,
@@ -878,27 +878,12 @@ def train(
         **kwargs,
 ):
     # TODO Alfred implement this with diskcache to store the results
-    import dill
-    # download data
-    if os.path.isfile('data.pkl'):
-        with open('data.pkl', 'rb') as f:
-            print('load dill data')
-            data = dill.load(f)
-    if os.path.isfile('dp.pkl'):
-        with open('dp.pkl', 'rb') as f:
-            print('load dill dp')
-            dp = dill.load(f)
-    else:
-        dp = DataProcessor(data_source, **kwargs)
-        data = dp.download_data(ticker_list, start_date, end_date, time_interval)
-        data = dp.clean_data(data)
-        data = dp.add_technical_indicator(data, technical_indicator_list)
-        with open('data.pkl', 'wb') as f:
-            print('write dill data')
-            dill.dump(data, f)
-        with open('dp.pkl', 'wb') as f:
-            print('write dill dp')
-            dill.dump(dp, f)
+
+    dp = DataProcessor(data_source, **kwargs)
+    data = dp.download_data(ticker_list, start_date, end_date, time_interval)
+    data = dp.clean_data(data)
+    data = dp.add_technical_indicator(data, technical_indicator_list)
+
 
     if if_vix:
         data = dp.add_vix(data)

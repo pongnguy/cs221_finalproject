@@ -10,6 +10,7 @@ from stockstats import StockDataFrame as Sdf
 from finrl import config
 from finrl.meta.preprocessor.yahoodownloader import YahooDownloader
 
+from finrl.meta.paper_trading.utilities import memoize
 
 def load_dataset(*, file_name: str) -> pd.DataFrame:
     """
@@ -74,6 +75,7 @@ class FeatureEngineer:
         self.use_turbulence = use_turbulence
         self.user_defined_feature = user_defined_feature
 
+    @memoize
     def preprocess_data(self, df):
         """main method to do the feature engineering
         @:param config: source dataframe
