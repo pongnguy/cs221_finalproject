@@ -94,10 +94,10 @@ import os
 train(
     start_date=TRAIN_START_DATE,
     end_date=TRAIN_END_DATE,
-    ticker_list=tuple(ticker_list),
+    ticker_list=ticker_list,
     data_source="alpaca",
     time_interval="1Min",
-    technical_indicator_list=tuple(INDICATORS),
+    technical_indicator_list=INDICATORS,
     drl_lib="elegantrl",
     env=env,
     model_name="ppo",
@@ -105,7 +105,7 @@ train(
     API_KEY=DATA_API_KEY,
     API_SECRET=DATA_API_SECRET,
     API_BASE_URL=DATA_API_BASE_URL,
-    erl_params=frozenset(ERL_PARAMS),
+    erl_params=ERL_PARAMS,
     cwd="./papertrading_erl",  # current_working_dir
     break_step=1e5,
 )

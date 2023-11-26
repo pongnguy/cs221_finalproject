@@ -857,7 +857,6 @@ import functools
 
 # construct environment
 
-@functools.lru_cache(maxsize=128)
 def train(
         start_date,
         end_date,
@@ -868,7 +867,6 @@ def train(
         drl_lib,
         env,
         model_name,
-        erl_params: frozenset,
         if_vix=True,
         **kwargs,
 ):
@@ -910,10 +908,11 @@ def train(
     # read parameters
     cwd = kwargs.get("cwd", "./" + str(model_name))
 
-    erl_params = {k: v for v, k in enumerate(erl_params)} # accepts a frozenset
+
     if drl_lib == "elegantrl":
         DRLAgent_erl = DRLAgent
         break_step = kwargs.get("break_step", 1e6)
+        erl_params = kwargs.get("erl_params")
         agent = DRLAgent_erl(
             env=env,
             price_array=price_array,
