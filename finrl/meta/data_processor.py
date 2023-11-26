@@ -9,6 +9,8 @@ from finrl.meta.data_processors.processor_yahoofinance import (
     YahooFinanceProcessor as YahooFinance,
 )
 
+from finrl.meta.paper_trading.utilities import memoize
+
 from functools import cache
 
 
@@ -39,6 +41,7 @@ class DataProcessor:
         # Initialize variable in case it is using cache and does not use download_data() method
         self.tech_indicator_list = tech_indicator
         self.vix = vix
+
 
     def download_data(
         self, ticker_list, start_date, end_date, time_interval

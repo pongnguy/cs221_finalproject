@@ -32,7 +32,7 @@ print("TRADING_API_BASE_URL: ", TRADING_API_BASE_URL)
 
 from finrl.meta.env_stock_trading.env_stocktrading_np import StockTradingEnv
 from finrl.meta.paper_trading.alpaca import PaperTradingAlpaca
-from finrl.meta.paper_trading.common import train, test, alpaca_history, DIA_history
+from finrl.meta.paper_trading.common import train, test, alpaca_history, DIA_history, HashableDict
 from finrl.config import INDICATORS
 
 # Import Dow Jones 30 Symbols
@@ -46,7 +46,7 @@ ERL_PARAMS = {
     "batch_size": 2048,
     "gamma": 0.985,
     "seed": 312,
-    "net_dimension": [128, 64],
+    "net_dimension": tuple([128, 64]),
     "target_step": 5000,
     "eval_gap": 30,
     "eval_times": 1,
@@ -90,14 +90,16 @@ print("TRAINFULL_END_DATE: ", TRAINFULL_END_DATE)
 # Alfred train time_interval is set for 1D in order to match the training data
 import dill
 import os
+import time
 
+time0 = time.time()
 train(
     start_date=TRAIN_START_DATE,
     end_date=TRAIN_END_DATE,
-    ticker_list=ticker_list,
+    ticker_list=tuple(ticker_list),
     data_source="alpaca",
     time_interval="1Min",
-    technical_indicator_list=INDICATORS,
+    technical_indicator_list=tuple(INDICATORS),
     drl_lib="elegantrl",
     env=env,
     model_name="ppo",
@@ -105,12 +107,12 @@ train(
     API_KEY=DATA_API_KEY,
     API_SECRET=DATA_API_SECRET,
     API_BASE_URL=DATA_API_BASE_URL,
-    erl_params=ERL_PARAMS,
+    erl_params=HashableDict(ERL_PARAMS),
     cwd="./papertrading_erl",  # current_working_dir
     break_step=1e5,
 )
-
-
+time1 = time.time()
+print('train took s ', time1 - time0)
 
 #%%
 # Alfred test value is less than train time_interval
@@ -148,13 +150,14 @@ date_stamp = datetime.datetime.now().strftime('%Y-%m-%d_%H%M%S')
 plt.savefig(f'results/alpaca/fig_train_{date_stamp}.png')
 
 #%%
+time2 = time.time()
 train(
     start_date=TRAINFULL_START_DATE,  # After tuning well, retrain on the training and testing sets
     end_date=TRAINFULL_END_DATE,
-    ticker_list=ticker_list,
+    ticker_list=tuple(ticker_list),
     data_source="alpaca",
     time_interval="1Min",
-    technical_indicator_list=INDICATORS,
+    technical_indicator_list=tuple(INDICATORS),
     drl_lib="elegantrl",
     env=env,
     model_name="ppo",
@@ -162,10 +165,12 @@ train(
     API_KEY=DATA_API_KEY,
     API_SECRET=DATA_API_SECRET,
     API_BASE_URL=DATA_API_BASE_URL,
-    erl_params=ERL_PARAMS,
+    erl_params=HashableDict(ERL_PARAMS),
     cwd="./papertrading_erl_retrain",
     break_step=2e5,
 )
+time3 = time.time()
+print('trainfull took s ', time3 - time2)
 
 x = np.linspace(1, len(account_value_erl), len(account_value_erl))
 plt.plot(x, account_value_erl)

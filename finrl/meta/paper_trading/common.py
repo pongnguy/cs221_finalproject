@@ -25,9 +25,27 @@ from finrl.plot import backtest_stats
 from finrl.plot import get_baseline
 from finrl.plot import get_daily_return
 
+
+class HashableDict(dict):
+    def __hash__(self):
+        return hash(frozenset(self.items()))
+
+import diskcache as dc
+
+def memoize(func):
+    cache = dc.Cache('diskcache')
+
+    def memoized_func(**kwargs):
+        if kwargs in cache:
+            return cache[kwargs]
+        result = func(**kwargs)
+        cache[kwargs] = result
+        return result
+
+    return memoized_func
+
 # -----------------------------------------------------------------------------------------------------------------------------------------
 # PPO
-
 
 class ActorPPO(nn.Module):
     def __init__(self, dims: [int], state_dim: int, action_dim: int):
@@ -857,6 +875,7 @@ import functools
 
 # construct environment
 
+@memoize
 def train(
         start_date,
         end_date,
@@ -867,9 +886,11 @@ def train(
         drl_lib,
         env,
         model_name,
+        erl_params: HashableDict,
         if_vix=True,
         **kwargs,
 ):
+    # TODO Alfred implement this with diskcache to store the results
     import dill
     # download data
     if os.path.isfile('data.pkl'):
@@ -912,7 +933,7 @@ def train(
     if drl_lib == "elegantrl":
         DRLAgent_erl = DRLAgent
         break_step = kwargs.get("break_step", 1e6)
-        erl_params = kwargs.get("erl_params")
+        #erl_params = {k: v for v, k in enumerate(erl_params)} # kwargs.get("erl_params")
         agent = DRLAgent_erl(
             env=env,
             price_array=price_array,
@@ -934,6 +955,7 @@ from finrl.config import TEST_START_DATE
 from finrl.config_tickers import DOW_30_TICKER
 
 
+@memoize
 def test(
         start_date,
         end_date,
