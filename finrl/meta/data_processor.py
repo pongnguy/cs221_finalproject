@@ -55,7 +55,8 @@ class DataProcessor:
         )
         return df
 
-    @memoize(isMethod=True)
+    #@memoize(isMethod=True)
+    # Alfred needs time_interval to properly clean and memoize
     def clean_data(self, df, start, end) -> pd.DataFrame:
         df = self.processor.clean_data(df, start, end)
 

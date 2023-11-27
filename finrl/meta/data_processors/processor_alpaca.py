@@ -159,8 +159,10 @@ class AlpacaProcessor:
         for day in trading_days:
             NY = "America/New_York"
             current_time = pd.Timestamp(day + " 09:30:00").tz_localize(NY)
+            # Alfred this is 6.5 hours to the end of the trading day
             for i in range(390):
                 times.append(current_time)
+                # Alfred times are created in minutes, but data can be daily
                 current_time += pd.Timedelta(minutes=1)
 
         print("Start processing tickers")
