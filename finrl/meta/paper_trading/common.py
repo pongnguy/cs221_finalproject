@@ -738,6 +738,9 @@ class DRLAgent:
         DRL_prediction()
             make a prediction in a test dataset and get results
     """
+    #def __hash__(self):
+    #    # Alfred some of these might be unhashable
+    #    return hash(self.env) + hash(self.price_array) + hash(self.tech_array) + hash(self.turbulence_array)
 
     def __init__(self, env, price_array, tech_array, turbulence_array):
         self.env = env
@@ -782,6 +785,7 @@ class DRLAgent:
                 )
         return model
 
+    @memoize(isMethod=True)
     def train_model(self, model, cwd, total_timesteps=5000):
         model.cwd = cwd
         model.break_step = total_timesteps
@@ -880,7 +884,7 @@ def train(
     dp = DataProcessor(data_source, tech_indicator=technical_indicator_list, **kwargs)
     data = dp.download_data(ticker_list, start_date, end_date, time_interval)
     # Alfred need time_interval in the signature for memoization, otherwise will cause error
-    data = dp.clean_data(data, start_date, end_date)
+    data = dp.clean_data(data, start_date, end_date, time_interval)
     data = dp.add_technical_indicator(data, technical_indicator_list)
 
 
@@ -945,7 +949,7 @@ def test(
     # fetch data
     dp = DataProcessor(data_source, tech_indicator=technical_indicator_list, **kwargs)
     data = dp.download_data(ticker_list, start_date, end_date, time_interval)
-    data = dp.clean_data(data, start_date, end_date)
+    data = dp.clean_data(data, start_date, end_date, time_interval)
     data = dp.add_technical_indicator(data, technical_indicator_list)
 
     if if_vix:

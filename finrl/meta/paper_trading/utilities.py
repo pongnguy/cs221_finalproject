@@ -1,7 +1,7 @@
 import diskcache as dc
 import pandas.core.util.hashing
 import hashlib
-
+import inspect
 
 def memoize(isMethod):
     """
@@ -11,64 +11,43 @@ def memoize(isMethod):
     """
     cache = dc.Cache('diskcache')
 
+    def handle_value(value):
+        # Alfred pure class reference should be skipped
+        if inspect.isclass(value):
+            key = None
+        else:
+            try:
+                # Alfred all instantiated classes should implement the __hash__ function
+                key = hash(value)
+            except:
+                match str(type(value)):
+                    case "<class 'list'>":
+                        key = value
+                    case "<class 'pandas.core.frame.DataFrame'>":
+                        pandas_hash = int(hashlib.sha256(pandas.core.util.hashing.hash_pandas_object(value, index=True).values).hexdigest(), 16)
+                        key = pandas_hash
+                    case _:
+                        key = str(type(value))
+        return key
+
     def key_compute(*args, **kwargs):
-        # TODO Alfred apparently does not match when dataframe in the arguments since Python cannot assess truth value
-        # TODO Alfred loop through arguments and do some special processing for dataframes
-        # TODO Alfred this is intended when the first argument is self.  For regular functions this should look at the value of the first variable
         key = []
-        b = locals()
+        #b = locals()
         for i in range(0, len(args)):
             value = args[i]
-            a = str(type(value))
-            #key.append(hash(i))
-            # Alfred hack to account for self parameter when instantiating a class method
-            if i == 0 and isMethod:
-                #if str(type(value)) == "<class 'finrl.meta.data_processor.DataProcessor'>":
-                # Alfred use hash value if it exists, otherwise use the str of the type
-                # TODO Alfred can try this below as well
-                try:
-                    key.append(hash(value))
-                except:
-                    key.append(str(type(value)))
-            else:
-                if hasattr(value, '__class__'):
-                    match str(type(value)):
-                        case "<class 'list'>":
-                            key.append(value)
-                        case "<class 'pandas.core.frame.DataFrame'>":
-                            pandas_hash = int(hashlib.sha256(pandas.core.util.hashing.hash_pandas_object(value, index=True).values).hexdigest(), 16)
-                            key.append(pandas_hash)
-                        case _:
-                            key.append(hash(value))
-                else:
-                    key.append(hash(value))
+            key.append(handle_value(value))
 
         for k in kwargs:
             value = kwargs[k]
-            a = str(type(value))
-            #key.append(hash(i))
-            # Alfred hack to account for self parameter when instantiating a class method
-            #if i == 0 and isMethod:
-            #    key.append(str(type(value)))
-            #else:
-            if hasattr(value, '__class__'):
-                match str(type(value)):
-                    case "<class 'list'>":
-                        key.append(value)
-                    case "<class 'pandas.core.frame.DataFrame'>":
-                        pandas_hash = int(hashlib.sha256(pandas.core.util.hashing.hash_pandas_object(value, index=True).values).hexdigest(), 16)
-                        key.append(pandas_hash)
-                    case _:
-                        key.append(hash(value))
-            else:
-                key.append(hash(value))
+            key.append(handle_value(value))
 
         return key
 
     def inner(func):
         def memoized_func(*args, **kwargs):
-            # Alfred matches only based on class name, not the particular instantiation which includes the memory address
             key_computed = key_compute(*args, **kwargs)
+            old_key_computed1 = cache['alfred1']
+            #old_key_computed2 = cache['alfred2']
             if key_computed in cache:
                 return cache[key_computed]
             result = func(*args, **kwargs)

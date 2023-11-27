@@ -16,7 +16,12 @@ from finrl.meta.paper_trading.utilities import memoize
 class AlpacaProcessor:
     # Alfred implemented hash function to help with memoization
     def __hash__(self):
-        return hash(self.api._key_id + self.api._key_id + self.api._secret_key + self.api._base_url + self.api._api_version)
+        # concatenate the name of the class with all the relavent internal variables
+        return hash(str(type(self)) + self.api._key_id + self.api._key_id + self.api._secret_key + self.api._base_url + self.api._api_version)
+
+    #def __str__(self):
+    #def __repr__(self):
+
     def __init__(self, API_KEY=None, API_SECRET=None, API_BASE_URL=None, api=None):
         if api is None:
             try:
@@ -142,7 +147,7 @@ class AlpacaProcessor:
 
         return tmp_df
 
-    def clean_data(self, df, start, end):
+    def clean_data(self, df, start, end, time_interval):
         print("Data cleaning started")
         tic_list = np.unique(df.tic.values)
         n_tickers = len(tic_list)
@@ -156,17 +161,19 @@ class AlpacaProcessor:
 
         trading_days = self.get_trading_days(start=start, end=end)
 
+        # Alfred pull the full timestamp column and make unique
+        times = df['timestamp'].unique()
         # produce full timestamp index
-        print("produce full timestamp index")
-        times = []
-        for day in trading_days:
-            NY = "America/New_York"
-            current_time = pd.Timestamp(day + " 09:30:00").tz_localize(NY)
-            # Alfred this is 6.5 hours to the end of the trading day
-            for i in range(390):
-                times.append(current_time)
-                # Alfred times are created in minutes, but data can be daily
-                current_time += pd.Timedelta(minutes=1)
+        #print("produce full timestamp index")
+        #times = []
+        #for day in trading_days:
+        #    NY = "America/New_York"
+        #    current_time = pd.Timestamp(day + " 09:30:00").tz_localize(NY)
+        #    # Alfred this is 6.5 hours to the end of the trading day
+        #    for i in range(390):
+        #        times.append(current_time)
+        #        # Alfred times are created in minutes, but data can be daily
+        #        current_time += pd.Timedelta(minutes=1)
 
         print("Start processing tickers")
 
@@ -255,7 +262,7 @@ class AlpacaProcessor:
     # Allows to multithread the add_vix function for quicker execution
     def download_and_clean_data(self, start, end, time_interval):
         vix_df = self.download_data(["VIXY"], start, end, time_interval)
-        return self.clean_data(vix_df)
+        return self.clean_data(vix_df, start, end, time_interval)
 
     def add_vix(self, data, start, end, time_interval):
         with ThreadPoolExecutor() as executor:

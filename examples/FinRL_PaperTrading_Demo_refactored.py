@@ -134,6 +134,7 @@ account_value_erl, dates, data = test(
     net_dimension=ERL_PARAMS["net_dimension"],
 )
 
+# TODO Alfred store a json along with the image that has all the information need to recreate the run (expect for API login)
 import numpy as np
 import matplotlib.pyplot as plt
 #dates_str = [(datetime.datetime.strptime(TEST_START_DATE,'%Y-%m-%d') + datetime.timedelta(minutes=i)).strftime('%Y-%m-%d') for i in dates]
@@ -148,6 +149,7 @@ plt.plot(x, account_value_erl)
 plt.title(f"Dates {TEST_START_DATE} to {TEST_END_DATE}, 1Min", fontsize=12)
 date_stamp = datetime.datetime.now().strftime('%Y-%m-%d_%H%M%S')
 plt.savefig(f'results/alpaca/fig_train_{date_stamp}.png')
+print('saved figures for train run')
 
 #%%
 time2 = time.time()
@@ -177,6 +179,7 @@ plt.plot(x, account_value_erl)
 plt.title(f"Dates {TEST_START_DATE} to {TEST_END_DATE}, 1Min", fontsize=12)
 date_stamp = datetime.datetime.now().strftime('%Y-%m-%d_%H%M%S')
 plt.savefig(f'results/alpaca/fig_trainfull_{date_stamp}.png')
+print('saved figures for trainfull run')
 
 #%%
 
@@ -184,6 +187,8 @@ action_dim = len(DOW_30_TICKER)
 state_dim = (
     1 + 2 + 3 * action_dim + len(INDICATORS) * action_dim
 )  # Calculate the DRL state dimension manually for paper trading. amount + (turbulence, turbulence_bool) + (price, shares, cd (holding time)) * stock_dim + tech_dim
+
+exit()
 
 paper_trading_erl = PaperTradingAlpaca(
     ticker_list=DOW_30_TICKER,
@@ -203,8 +208,10 @@ paper_trading_erl = PaperTradingAlpaca(
 )
 print('end of paper_trading_erl')
 
-#paper_trading_erl.run()
+paper_trading_erl.run()
 print('end of paper_trading_erl.run()')
+
+
 
 # Check Portfolio Performance
 # ## Get cumulative return

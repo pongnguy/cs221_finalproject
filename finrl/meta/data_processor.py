@@ -61,14 +61,14 @@ class DataProcessor:
 
     #@memoize(isMethod=True)
     # Alfred needs time_interval to properly clean and memoize
-    def clean_data(self, df, start, end) -> pd.DataFrame:
-        df = self.processor.clean_data(df, start, end)
+    def clean_data(self, df, start, end, time_interval) -> pd.DataFrame:
+        df = self.processor.clean_data(df, start, end, time_interval)
 
         return df
 
     @memoize(isMethod=True)
     def add_technical_indicator(self, df, tech_indicator_list) -> pd.DataFrame:
-        self.tech_indicator_list = tech_indicator_list
+        self.tech_indicator_list = list(tech_indicator_list)
         df = self.processor.add_technical_indicator(df, tech_indicator_list)
 
         return df
