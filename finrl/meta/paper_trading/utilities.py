@@ -62,16 +62,8 @@ def memoize(isMethod):
                         key.append(hash(value))
             else:
                 key.append(hash(value))
-            #    class_name = str(i.__class__)
-            #    if class_name == 'pandas.core.frame.DataFrame':
-            #        key.append(hash(i))
-            #    else:
-            #        key.append(class_name)
-            #else:
-            #    key.append(i)
 
         return key
-        #return (args[0].__class__, args[1:], kwargs)
 
     def inner(func):
         def memoized_func(*args, **kwargs):
