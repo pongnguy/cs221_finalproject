@@ -12,9 +12,9 @@ def memoize(isMethod):
     cache = dc.Cache('diskcache')
 
     def handle_value(value):
-        # Alfred pure class reference should be skipped
+        # Alfred pure class reference hash changes
         if inspect.isclass(value):
-            key = None
+            key = str(type(value))
         else:
             try:
                 # Alfred all instantiated classes should implement the __hash__ function
