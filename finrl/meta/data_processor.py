@@ -15,6 +15,10 @@ from functools import cache
 
 
 class DataProcessor:
+    # Alfred implemented hash function to help with memoization
+    def __hash__(self):
+        # go through all self variables and compute the hash
+        return hash(self.processor)
     def __init__(self, data_source, tech_indicator=None, vix=None, **kwargs):
         if data_source == "alpaca":
             try:

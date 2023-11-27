@@ -23,7 +23,13 @@ def memoize(isMethod):
             #key.append(hash(i))
             # Alfred hack to account for self parameter when instantiating a class method
             if i == 0 and isMethod:
-                key.append(str(type(value)))
+                #if str(type(value)) == "<class 'finrl.meta.data_processor.DataProcessor'>":
+                # Alfred use hash value if it exists, otherwise use the str of the type
+                # TODO Alfred can try this below as well
+                try:
+                    key.append(hash(value))
+                except:
+                    key.append(str(type(value)))
             else:
                 if hasattr(value, '__class__'):
                     match str(type(value)):

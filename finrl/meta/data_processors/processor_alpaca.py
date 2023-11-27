@@ -14,6 +14,9 @@ from stockstats import StockDataFrame as Sdf
 from finrl.meta.paper_trading.utilities import memoize
 
 class AlpacaProcessor:
+    # Alfred implemented hash function to help with memoization
+    def __hash__(self):
+        return hash(self.api._key_id + self.api._key_id + self.api._secret_key + self.api._base_url + self.api._api_version)
     def __init__(self, API_KEY=None, API_SECRET=None, API_BASE_URL=None, api=None):
         if api is None:
             try:
