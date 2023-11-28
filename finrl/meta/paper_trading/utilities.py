@@ -9,7 +9,7 @@ def memoize(isMethod):
     :param isMethod:
     :return:
     """
-    cache = dc.Cache('diskcache')
+    cache = dc.Cache('diskcache/memoize')
 
     def handle_value(value):
         # Alfred pure class reference hash changes

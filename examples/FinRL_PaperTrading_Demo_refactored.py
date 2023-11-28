@@ -8,6 +8,9 @@ from __future__ import annotations
 import argparse
 import functools
 
+import numpy as np
+import matplotlib.pyplot as plt
+
 parser = argparse.ArgumentParser()
 parser.add_argument("data_key", help="data source api key")
 parser.add_argument("data_secret", help="data source api secret")
@@ -61,7 +64,7 @@ today = datetime.datetime.today()
 TEST_END_DATE = (today - BDay(1)).to_pydatetime().date()
 TEST_START_DATE = (TEST_END_DATE - BDay(10)).to_pydatetime().date()
 TRAIN_END_DATE = (TEST_START_DATE - BDay(1)).to_pydatetime().date()
-TRAIN_START_DATE = (TRAIN_END_DATE - BDay(50)).to_pydatetime().date()
+TRAIN_START_DATE = (TRAIN_END_DATE - BDay(100)).to_pydatetime().date()
 TRAINFULL_START_DATE = TRAIN_START_DATE
 TRAINFULL_END_DATE = TEST_END_DATE
 
@@ -93,12 +96,13 @@ import os
 import time
 
 time0 = time.time()
+TRAIN_TIMEINTERVAL = "1D"
 train(
     start_date=TRAIN_START_DATE,
     end_date=TRAIN_END_DATE,
     ticker_list=tuple(ticker_list),
     data_source="alpaca",
-    time_interval="1Min",
+    time_interval=TRAIN_TIMEINTERVAL,
     technical_indicator_list=tuple(INDICATORS),
     drl_lib="elegantrl",
     env=env,
@@ -116,12 +120,13 @@ print('train took s ', time1 - time0)
 
 #%%
 # Alfred test value is less than train time_interval
+TEST_TIMEINTERVAL = "1Min"
 account_value_erl, dates, data = test(
     start_date=TEST_START_DATE,
     end_date=TEST_END_DATE,
     ticker_list=ticker_list,
     data_source="alpaca",
-    time_interval="1Min",
+    time_interval=TEST_TIMEINTERVAL,
     technical_indicator_list=INDICATORS,
     drl_lib="elegantrl",
     env=env,
@@ -135,30 +140,23 @@ account_value_erl, dates, data = test(
 )
 
 # TODO Alfred store a json along with the image that has all the information need to recreate the run (expect for API login)
-import numpy as np
-import matplotlib.pyplot as plt
-#dates_str = [(datetime.datetime.strptime(TEST_START_DATE,'%Y-%m-%d') + datetime.timedelta(minutes=i)).strftime('%Y-%m-%d') for i in dates]
 x = np.linspace(1, len(account_value_erl), len(account_value_erl))
-#x = np.arange(np.datetime64(TEST_START_DATE),np.datetime64(TEST_END_DATE), np.timedelta64(1, 'm'))
 # TODO Alfred plot with the correct dates in the x-axis
-#plt.plot(dates_str, account_value_erl)
-#x = data.timestamp.unique()
 plt.plot(x, account_value_erl)
-#plt.text(100,100, f"Dates from {TEST_START_DATE} to {TEST_END_DATE}", fontsize=12)
-#plt.show()
-plt.title(f"Dates {TEST_START_DATE} to {TEST_END_DATE}, 1Min", fontsize=12)
+plt.title(f"Dates {TEST_START_DATE} to {TEST_END_DATE}, {TEST_TIMEINTERVAL} test and {TRAIN_TIMEINTERVAL} train", fontsize=12)
 date_stamp = datetime.datetime.now().strftime('%Y-%m-%d_%H%M%S')
 plt.savefig(f'results/alpaca/fig_train_{date_stamp}.png')
 print('saved figures for train run')
 
 #%%
 time2 = time.time()
+TRAINFULL_TIMEINTERVAL = "1Min"
 train(
     start_date=TRAINFULL_START_DATE,  # After tuning well, retrain on the training and testing sets
     end_date=TRAINFULL_END_DATE,
     ticker_list=tuple(ticker_list),
     data_source="alpaca",
-    time_interval="1Min",
+    time_interval=TRAINFULL_TIMEINTERVAL,
     technical_indicator_list=tuple(INDICATORS),
     drl_lib="elegantrl",
     env=env,
@@ -174,9 +172,31 @@ train(
 time3 = time.time()
 print('trainfull took s ', time3 - time2)
 
+
+TEST_TIMEINTERVAL = "1Min"
+account_value_erl, dates, data = test(
+    start_date=TEST_START_DATE,
+    end_date=TEST_END_DATE,
+    ticker_list=ticker_list,
+    data_source="alpaca",
+    time_interval=TEST_TIMEINTERVAL,
+    technical_indicator_list=INDICATORS,
+    drl_lib="elegantrl",
+    env=env,
+    model_name="ppo",
+    if_vix=True,
+    API_KEY=DATA_API_KEY,
+    API_SECRET=DATA_API_SECRET,
+    API_BASE_URL=DATA_API_BASE_URL,
+    cwd="./papertrading_erl",
+    net_dimension=ERL_PARAMS["net_dimension"],
+)
+
+# TODO Alfred store a json along with the image that has all the information need to recreate the run (expect for API login)
 x = np.linspace(1, len(account_value_erl), len(account_value_erl))
+# TODO Alfred plot with the correct dates in the x-axis
 plt.plot(x, account_value_erl)
-plt.title(f"Dates {TEST_START_DATE} to {TEST_END_DATE}, 1Min", fontsize=12)
+plt.title(f"Dates {TEST_START_DATE} to {TEST_END_DATE}, {TEST_TIMEINTERVAL} test and {TRAINFULL_TIMEINTERVAL} train", fontsize=12)
 date_stamp = datetime.datetime.now().strftime('%Y-%m-%d_%H%M%S')
 plt.savefig(f'results/alpaca/fig_trainfull_{date_stamp}.png')
 print('saved figures for trainfull run')
@@ -188,7 +208,6 @@ state_dim = (
     1 + 2 + 3 * action_dim + len(INDICATORS) * action_dim
 )  # Calculate the DRL state dimension manually for paper trading. amount + (turbulence, turbulence_bool) + (price, shares, cd (holding time)) * stock_dim + tech_dim
 
-exit()
 
 paper_trading_erl = PaperTradingAlpaca(
     ticker_list=DOW_30_TICKER,
