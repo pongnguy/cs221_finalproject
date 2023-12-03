@@ -46,7 +46,7 @@ def memoize(isMethod):
     def inner(func):
         def memoized_func(*args, **kwargs):
             key_computed = key_compute(*args, **kwargs)
-            old_key_computed1 = cache['alfred1']
+            #old_key_computed1 = cache['alfred1']
             #old_key_computed2 = cache['alfred2']
             if key_computed in cache:
                 return cache[key_computed]
