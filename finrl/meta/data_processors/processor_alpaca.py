@@ -9,9 +9,22 @@ import numpy as np
 import pandas as pd
 import pytz
 from stockstats import StockDataFrame as Sdf
+from finrl.meta.data_processor import DataProcessor
 
+from finrl.meta.paper_trading.utilities import timeit, keycompute
+#from diskcache import Cache
 
-class AlpacaProcessor:
+#cache = Cache('/mnt/diskcache/cs221_finrl', EVICTION_POLICY='none')
+
+class AlpacaProcessor(DataProcessor):
+    # Alfred implemented hash function to help with memoization
+    def __hash__(self):
+        # concatenate the name of the class with all the relavent internal variables
+        return hash(str(type(self)) + self.api._key_id + self.api._key_id + self.api._secret_key + self.api._base_url + self.api._api_version)
+
+    #def __str__(self):
+    #def __repr__(self):
+
     def __init__(self, API_KEY=None, API_SECRET=None, API_BASE_URL=None, api=None):
         if api is None:
             try:
@@ -31,6 +44,9 @@ class AlpacaProcessor:
         bars["symbol"] = ticker
         return bars
 
+
+    @timeit
+    #@cache.memoize(hash=keycompute)
     def download_data(
         self, ticker_list, start_date, end_date, time_interval
     ) -> pd.DataFrame:
@@ -55,7 +71,7 @@ class AlpacaProcessor:
         end_date = pd.Timestamp(end_date + " 15:59:00", tz=NY)
 
         # Use ThreadPoolExecutor to fetch data for multiple tickers concurrently
-        with ThreadPoolExecutor(max_workers=10) as executor:
+        with ThreadPoolExecutor(max_workers=1) as executor:
             futures = [
                 executor.submit(
                     self._fetch_data_for_ticker,
@@ -97,6 +113,7 @@ class AlpacaProcessor:
         tmp_df = pd.DataFrame(index=times)
         tic_df = df[df.tic == tic].set_index("timestamp")
 
+        # Alfred causing error trying to merge minute data with daily data
         # Step 1: Merging dataframes to avoid loop
         tmp_df = tmp_df.merge(
             tic_df[["open", "high", "low", "close", "volume"]],
@@ -135,7 +152,10 @@ class AlpacaProcessor:
 
         return tmp_df
 
-    def clean_data(self, df):
+    @timeit
+    #@cache.memoize()
+    # Alfred why calls this directly and not the parent one?
+    def clean_data(self, df, start, end, time_interval):
         print("Data cleaning started")
         tic_list = np.unique(df.tic.values)
         n_tickers = len(tic_list)
@@ -147,24 +167,37 @@ class AlpacaProcessor:
 
         # ... (generating 'times' series, same as in your existing code)
 
-        trading_days = self.get_trading_days(start=self.start, end=self.end)
+        trading_days = self.get_trading_days(start=start, end=end)
 
+        # Alfred pull the full timestamp column and make unique
+        times = df['timestamp'].unique()
         # produce full timestamp index
-        print("produce full timestamp index")
-        times = []
-        for day in trading_days:
-            NY = "America/New_York"
-            current_time = pd.Timestamp(day + " 09:30:00").tz_localize(NY)
-            for i in range(390):
-                times.append(current_time)
-                current_time += pd.Timedelta(minutes=1)
+        #print("produce full timestamp index")
+        #times = []
+        #for day in trading_days:
+        #    NY = "America/New_York"
+        #    current_time = pd.Timestamp(day + " 09:30:00").tz_localize(NY)
+        #    # Alfred this is 6.5 hours to the end of the trading day
+        #    for i in range(390):
+        #        times.append(current_time)
+        #        # Alfred times are created in minutes, but data can be daily
+        #        current_time += pd.Timedelta(minutes=1)
 
         print("Start processing tickers")
 
         future_results = []
-        for tic in tic_list:
-            result = self.clean_individual_ticker((tic, df.copy(), times))
-            future_results.append(result)
+        # TODO Alfred processes these in parallel with different threads
+        # Does not work for CPU bound tasks, update to use multiprocessing
+        with ThreadPoolExecutor(max_workers=8) as executor:
+            futures = [
+                executor.submit(
+                    self.clean_individual_ticker,
+                    (tic, df.copy(), times)
+                )
+                for tic in tic_list
+            ]
+            for future in futures:
+                future_results.append(future.result())
 
         print("ticker list complete")
 
@@ -244,13 +277,13 @@ class AlpacaProcessor:
         return df
 
     # Allows to multithread the add_vix function for quicker execution
-    def download_and_clean_data(self):
-        vix_df = self.download_data(["VIXY"], self.start, self.end, self.time_interval)
-        return self.clean_data(vix_df)
+    def download_and_clean_data(self, start, end, time_interval):
+        vix_df = self.download_data(["VIXY"], start, end, time_interval)
+        return self.clean_data(vix_df, start, end, time_interval)
 
-    def add_vix(self, data):
+    def add_vix(self, data, start, end, time_interval):
         with ThreadPoolExecutor() as executor:
-            future = executor.submit(self.download_and_clean_data)
+            future = executor.submit(self.download_and_clean_data, start, end, time_interval)
             cleaned_vix = future.result()
 
         vix = cleaned_vix[["timestamp", "close"]]
@@ -453,4 +486,4 @@ class AlpacaProcessor:
         latest_tech = tech_array[-1]
         turb_df = self.api.get_bars(["VIXY"], time_interval, limit=1).df
         latest_turb = turb_df["close"].values
-        return latest_price, latest_tech, latest_turb
+        return latest_price, latest_tech

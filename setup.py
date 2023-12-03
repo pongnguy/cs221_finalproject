@@ -3,6 +3,10 @@ from __future__ import annotations
 from setuptools import find_packages
 from setuptools import setup
 
+from distutils.core import setup
+from distutils.extension import Extension
+from Cython.Distutils import build_ext
+
 # Read requirements.txt, ignore comments
 try:
     REQUIRES = list()

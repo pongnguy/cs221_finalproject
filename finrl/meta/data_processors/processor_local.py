@@ -19,44 +19,124 @@ import pandas as pd
 import pytz
 #import yfinance as yf
 from stockstats import StockDataFrame as Sdf
+from finrl.meta.data_processor import DataProcessor
 
-
-class LocalProcessor:
+class LocalProcessor(DataProcessor):
     """Provides methods for retrieving daily stock data from
     Local storage
     """
-    # TODO Alfred WIP
 
     def __init__(self):
         pass
 
-    """
-    Param
-    ----------
-        start_date : str
-            start date of the data
-        end_date : str
-            end date of the data
-        ticker_list : list
-            a list of stock tickers
-    Example
-    -------
-    input:
-    ticker_list = config_tickers.DOW_30_TICKER
-    start_date = '2009-01-01'
-    end_date = '2021-10-31'
-    time_interval == "1D"
+    def resample_data(self, start_date: str,
+                      end_date: str,
+                      time_interval: str) -> pd.DataFrame:
+        raise NotImplementedError
 
-    output:
-        date	    tic	    open	    high	    low	        close	    volume
-    0	2009-01-02	AAPL	3.067143	3.251429	3.041429	2.767330	746015200.0
-    1	2009-01-02	AMGN	58.590000	59.080002	57.750000	44.523766	6547900.0
-    2	2009-01-02	AXP	    18.570000	19.520000	18.400000	15.477426	10955700.0
-    3	2009-01-02	BA	    42.799999	45.560001	42.779999	33.941093	7010200.0
-    ...
-    """
+        # Import package & get the data
+        import yfinance as yf
+        intraday_data = yf.download(tickers="MSFT",
+                                    period="5d",
+                                    interval="1m",
+                                    auto_adjust=True)
+
+        # Define the resampling logic
+        ohlcv_dict = {
+            'Open': 'first',
+            'High': 'max',
+            'Low': 'min',
+            'Close': 'last',
+            'Volume': 'sum'
+        }
+
+        # Resample the data
+        intraday_data_10 = intraday_data.resample('10T').agg(ohlcv_dict)
+        intraday_data_10.head()
+
+    def ratios(self, ticker):
+        raise NotImplementedError
+        import yfinance as yf
+
+        # Set the ticker as MSFT
+        msft = yf.Ticker("MSFT")
+
+        # get price to book
+        pb = msft.info['priceToBook']
+        pe = msft.info['regularMarketPrice']/msft.info['trailingEps']
+        print('Price to Book Ratio is: %.2f' % pb)
+        print('Price to Earnings Ratio is: %.2f' % pe)
+
+        # show revenues
+        revenue = msft.financials.loc['Total Revenue']
+        plt.bar(revenue.index, revenue.values)
+        plt.ylabel("Total Revenues")
+        plt.show()
+
+        # show income statement
+        msft.financials
+        # show balance heet
+        msft.balance_sheet
+        # show cashflow
+        msft.cashflow
+        # show other info
+        msft.info
+
+
+    def download_data(
+            self,
+            ticker_list: list[str],
+            start_date: str,
+            end_date: str,
+            time_interval: str,
+            proxy: str | dict = None,
+    ) -> pd.DataFrame:
+        """
+        Param
+        ----------
+            start_date : str
+                start date of the data
+            end_date : str
+                end date of the data
+            ticker_list : list
+                a list of stock tickers
+        Example
+        -------
+        input:
+        ticker_list = config_tickers.DOW_30_TICKER
+        start_date = '2009-01-01'
+        end_date = '2021-10-31'
+        time_interval == "1D"
+
+        output:
+            date	    tic	    open	    high	    low	        close	    volume
+        0	2009-01-02	AAPL	3.067143	3.251429	3.041429	2.767330	746015200.0
+        1	2009-01-02	AMGN	58.590000	59.080002	57.750000	44.523766	6547900.0
+        2	2009-01-02	AXP	    18.570000	19.520000	18.400000	15.477426	10955700.0
+        3	2009-01-02	BA	    42.799999	45.560001	42.779999	33.941093	7010200.0
+        ...
+        """
+        # TODO Alfred input parameters are ignored
+        self.start = start_date
+        self.end = end_date
+        self.time_interval = time_interval
+
+        train = pd.read_csv('./train_data.csv')
+        train = train.set_index(train.columns[0])
+        train.index.names = ['']
+
+        trade = pd.read_csv('./trade_data.csv')
+        trade = trade.set_index(trade.columns[0])
+        trade.index.names = ['']
+
+        dataframes = [train, trade]
+        result = pd.concat(dataframes)
+
+        return result
+
 
     def convert_interval(self, time_interval: str) -> str:
+        raise NotImplementedError
         # Convert FinRL 'standardised' time periods to Yahoo format: 1m, 2m, 5m, 15m, 30m, 60m, 90m, 1h, 1d, 5d, 1wk, 1mo, 3mo
         if time_interval in [
             "1Min",
@@ -79,55 +159,10 @@ class LocalProcessor:
 
         return time_interval
 
-    def download_data(
-        self,
-        ticker_list: list[str],
-        start_date: str,
-        end_date: str,
-        time_interval: str,
-        proxy: str | dict = None,
-    ) -> pd.DataFrame:
-        time_interval = self.convert_interval(time_interval)
 
-        self.start = start_date
-        self.end = end_date
-        self.time_interval = time_interval
-
-        # Download and save the data in a pandas DataFrame
-        start_date = pd.Timestamp(start_date)
-        end_date = pd.Timestamp(end_date)
-        delta = timedelta(days=1)
-        data_df = pd.DataFrame()
-        for tic in ticker_list:
-            while (
-                start_date <= end_date
-            ):  # downloading daily to workaround yfinance only allowing  max 7 calendar (not trading) days of 1 min data per single download
-                temp_df = yf.download(
-                    tic,
-                    start=start_date,
-                    end=start_date + delta,
-                    interval=self.time_interval,
-                    proxy=proxy,
-                )
-                temp_df["tic"] = tic
-                data_df = pd.concat([data_df, temp_df])
-                start_date += delta
-
-        data_df = data_df.reset_index().drop(columns=["Adj Close"])
-        # convert the column names to match processor_alpaca.py as far as poss
-        data_df.columns = [
-            "timestamp",
-            "open",
-            "high",
-            "low",
-            "close",
-            "volume",
-            "tic",
-        ]
-
-        return data_df
-
-    def clean_data(self, df: pd.DataFrame) -> pd.DataFrame:
+    def clean_data(self, df: pd.DataFrame, start, end, time_interval) -> pd.DataFrame:
+        return df
+        #raise NotImplementedError
         tic_list = np.unique(df.tic.values)
         NY = "America/New_York"
 
@@ -233,6 +268,8 @@ class LocalProcessor:
         :param data: (df) pandas dataframe
         :return: (df) pandas dataframe
         """
+        return data
+        #raise NotImplementedError
         df = data.copy()
         df = df.sort_values(by=["tic", "timestamp"])
         stock = Sdf.retype(df.copy())
@@ -267,6 +304,7 @@ class LocalProcessor:
         :param data: (df) pandas dataframe
         :return: (df) pandas dataframe
         """
+        raise NotImplementedError
         vix_df = self.download_data(["VIXY"], self.start, self.end, self.time_interval)
         cleaned_vix = self.clean_data(vix_df)
         print("cleaned_vix\n", cleaned_vix)
@@ -284,6 +322,7 @@ class LocalProcessor:
     def calculate_turbulence(
         self, data: pd.DataFrame, time_period: int = 252
     ) -> pd.DataFrame:
+        #raise NotImplementedError
         # can add other market assets
         df = data.copy()
         df_price_pivot = df.pivot(index="timestamp", columns="tic", values="close")
@@ -339,6 +378,7 @@ class LocalProcessor:
         :param data: (df) pandas dataframe
         :return: (df) pandas dataframe
         """
+        #raise NotImplementedError
         df = data.copy()
         turbulence_index = self.calculate_turbulence(df, time_period=time_period)
         df = df.merge(turbulence_index, on="timestamp")
@@ -346,7 +386,7 @@ class LocalProcessor:
         return df
 
     def df_to_array(
-        self, df: pd.DataFrame, tech_indicator_list: list[str], if_vix: bool
+        self, df: pd.DataFrame, tech_indicator_list: list[str]
     ) -> list[np.ndarray]:
         df = df.copy()
         unique_ticker = df.tic.unique()
@@ -355,10 +395,6 @@ class LocalProcessor:
             if if_first_time:
                 price_array = df[df.tic == tic][["close"]].values
                 tech_array = df[df.tic == tic][tech_indicator_list].values
-                if if_vix:
-                    turbulence_array = df[df.tic == tic]["VIXY"].values
-                else:
-                    turbulence_array = df[df.tic == tic]["turbulence"].values
                 if_first_time = False
             else:
                 price_array = np.hstack(
@@ -368,7 +404,7 @@ class LocalProcessor:
                     [tech_array, df[df.tic == tic][tech_indicator_list].values]
                 )
         #        print("Successfully transformed into array")
-        return price_array, tech_array, turbulence_array
+        return price_array, tech_array
 
     def get_trading_days(self, start: str, end: str) -> list[str]:
         nyse = tc.get_calendar("NYSE")
@@ -389,6 +425,7 @@ class LocalProcessor:
         tech_indicator_list: list[str],
         limit: int = 100,
     ) -> pd.DataFrame:
+        raise NotImplementedError
         time_interval = self.convert_interval(time_interval)
 
         end_datetime = datetime.datetime.now()

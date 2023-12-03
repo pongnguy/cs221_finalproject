@@ -6,15 +6,22 @@ from numpy import random as rd
 
 
 class StockTradingEnv(gym.Env):
+    def __hash__(self):
+        # Alfred use the env_name as a simple hash, ignoring all the other parameters
+        print('overriden hash function')
+        return hash(self.env_name)
+
     def __init__(
         self,
         config,
         initial_account=1e6,
         gamma=0.99,
-        turbulence_thresh=99,
+        #turbulence_thresh=99,
         min_stock_rate=0.1,
-        max_stock=1e2,
-        initial_capital=1e6,
+        # TODO Alfred expose this as a parameter
+        #max_stock=1e2,
+        #initial_capital=280,
+        #initial_capital=1e6,
         buy_cost_pct=1e-3,
         sell_cost_pct=1e-3,
         reward_scaling=2**-11,
@@ -22,26 +29,21 @@ class StockTradingEnv(gym.Env):
     ):
         price_ary = config["price_array"]
         tech_ary = config["tech_array"]
-        turbulence_ary = config["turbulence_array"]
         if_train = config["if_train"]
         self.price_ary = price_ary.astype(np.float32)
         self.tech_ary = tech_ary.astype(np.float32)
-        self.turbulence_ary = turbulence_ary
 
         self.tech_ary = self.tech_ary * 2**-7
-        self.turbulence_bool = (turbulence_ary > turbulence_thresh).astype(np.float32)
-        self.turbulence_ary = (
-            self.sigmoid_sign(turbulence_ary, turbulence_thresh) * 2**-5
-        ).astype(np.float32)
 
         stock_dim = self.price_ary.shape[1]
         self.gamma = gamma
-        self.max_stock = max_stock
+        self.max_stock = config["max_stock"]
         self.min_stock_rate = min_stock_rate
         self.buy_cost_pct = buy_cost_pct
         self.sell_cost_pct = sell_cost_pct
         self.reward_scaling = reward_scaling
-        self.initial_capital = initial_capital
+        self.initial_capital = config["initial_capital"]
+        print(f'initial capital is {self.initial_capital}')
         self.initial_stocks = (
             np.zeros(stock_dim, dtype=np.float32)
             if initial_stocks is None
@@ -63,6 +65,7 @@ class StockTradingEnv(gym.Env):
         self.state_dim = 1 + 2 + 3 * stock_dim + self.tech_ary.shape[1]
         # amount + (turbulence, turbulence_bool) + (price, stock) * stock_dim + tech_dim
         self.stocks_cd = None
+        # Alfred Action dimension set to stock dimension
         self.action_dim = stock_dim
         self.max_step = self.price_ary.shape[0] - 1
         self.if_train = if_train
@@ -106,19 +109,22 @@ class StockTradingEnv(gym.Env):
         return self.get_state(price), {}  # state
 
     def step(self, actions):
-        # Alfred scale actions to 100
-        actions = (actions * self.max_stock).astype(int)
+        # Alfred scale actions to maximum stock purchases
+        actions = (actions * self.max_stock)
+        #actions = (actions * self.max_stock).astype(int)
 
         self.day += 1
         price = self.price_ary[self.day]
         self.stocks_cool_down += 1
 
-        if self.turbulence_bool[self.day] == 0:
+        if True: #self.turbulence_bool[self.day] == 0:
             min_action = int(self.max_stock * self.min_stock_rate)  # stock_cd
             # Alfred determine stocks to sell
             for index in np.where(actions < -min_action)[0]:  # sell_index:
                 if price[index] > 0:  # Sell only if current asset is > 0
                     # Alfred evaluate RL action for selling
+                    # Alfred double check if can sell fractional shares
+                    #print(f'sell {-actions[index]}')
                     sell_num_shares = min(self.stocks[index], -actions[index])
                     # Alfred queue for selling
                     self.stocks[index] -= sell_num_shares
@@ -132,6 +138,7 @@ class StockTradingEnv(gym.Env):
                     price[index] > 0
                 ):  # Buy only if the price is > 0 (no missing data in this particular date)
                     # Alfred evaluate RL action for buying
+                    #print(f'buy {actions[index]}')
                     buy_num_shares = min(self.amount // price[index], actions[index])
                     # Alfred queue for buying
                     self.stocks[index] += buy_num_shares
@@ -140,14 +147,17 @@ class StockTradingEnv(gym.Env):
                     )
                     self.stocks_cool_down[index] = 0
 
-        else:  # sell all when turbulence
-            self.amount += (self.stocks * price).sum() * (1 - self.sell_cost_pct)
-            self.stocks[:] = 0
-            self.stocks_cool_down[:] = 0
+        #else:  # sell all when turbulence
+        #    self.amount += (self.stocks * price).sum() * (1 - self.sell_cost_pct)
+        #    self.stocks[:] = 0
+        #    self.stocks_cool_down[:] = 0
 
         state = self.get_state(price)
         total_asset = self.amount + (self.stocks * price).sum()
-        reward = (total_asset - self.total_asset) * self.reward_scaling
+        # TODO Alfred update reward function to take into account withdrawal request
+        # TODO Alfred for development purposes, just set to a fixed value and observe the cash balance
+        #min_cash = 20000  # initial amount is 1,000,000
+        reward = (total_asset - self.total_asset) * self.reward_scaling # + (min(max(state[0],0),min_cash) - min_cash)
         self.total_asset = total_asset
 
         self.gamma_reward = self.gamma_reward * self.gamma + reward
@@ -164,8 +174,8 @@ class StockTradingEnv(gym.Env):
         return np.hstack(
             (
                 amount,
-                self.turbulence_ary[self.day],
-                self.turbulence_bool[self.day],
+                0, #self.turbulence_ary[self.day],
+                0, #self.turbulence_bool[self.day],
                 price * scale,
                 self.stocks * scale,
                 self.stocks_cool_down,

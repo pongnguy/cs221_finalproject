@@ -8,11 +8,12 @@ import pandas as pd
 import pytz
 import wrds
 from stockstats import StockDataFrame as Sdf
+from finrl.meta.data_processor import DataProcessor
 
 pd.options.mode.chained_assignment = None
 
 
-class WrdsProcessor:
+class WrdsProcessor(DataProcessor):
     def __init__(self, if_offline=False):
         if not if_offline:
             self.db = wrds.Connection()

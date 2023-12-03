@@ -7,7 +7,8 @@ import os
 import time
 from copy import deepcopy
 
-import gym
+#import diskcache.core
+import gymnasium as gym
 import numpy as np
 import numpy.random as rd
 import pandas as pd
@@ -25,9 +26,20 @@ from finrl.plot import backtest_stats
 from finrl.plot import get_baseline
 from finrl.plot import get_daily_return
 
+from finrl.meta.paper_trading.utilities import timeit, memoize, hash_file
+#from diskcache import Cache
+from finrl.meta.data_processors.processor_local import LocalProcessor
+import io, hashlib, hmac
+
+#cache = Cache('/mnt/diskcache/cs221_finrl', EVICTION_POLICY='none')
+#cache_data = Cache('/mnt/diskcache/data', EVICTION_POLICY='none')
+
+class HashableDict(dict):
+    def __hash__(self):
+        return hash(frozenset(self.items()))
+
 # -----------------------------------------------------------------------------------------------------------------------------------------
 # PPO
-
 
 class ActorPPO(nn.Module):
     def __init__(self, dims: [int], state_dim: int, action_dim: int):
@@ -659,6 +671,7 @@ class Evaluator:
             get_rewards_and_steps(self.env_eval, actor) for _ in range(self.eval_times)
         ]
         rewards_steps_ary = np.array(rewards_steps_ary, dtype=np.float32)
+        # Alfred this does not appear to be displaying the proper values
         avg_r = rewards_steps_ary[:, 0].mean()  # average of cumulative rewards
         std_r = rewards_steps_ary[:, 0].std()  # std of cumulative rewards
         avg_s = rewards_steps_ary[:, 1].mean()  # average of steps in an episode
@@ -733,19 +746,24 @@ class DRLAgent:
         DRL_prediction()
             make a prediction in a test dataset and get results
     """
+    #def __hash__(self):
+    #    # Alfred some of these might be unhashable
+    #    return hash(self.env) + hash(self.price_array) + hash(self.tech_array) + hash(self.turbulence_array)
 
-    def __init__(self, env, price_array, tech_array, turbulence_array):
+    def __init__(self, env, price_array, tech_array):
         self.env = env
         self.price_array = price_array
         self.tech_array = tech_array
-        self.turbulence_array = turbulence_array
+        #self.turbulence_array = turbulence_array
 
     def get_model(self, model_name, model_kwargs):
         env_config = {
             "price_array": self.price_array,
             "tech_array": self.tech_array,
-            "turbulence_array": self.turbulence_array,
+            #"turbulence_array": self.turbulence_array,
             "if_train": True,
+            "initial_capital": model_kwargs["initial_capital"],
+            "max_stock": model_kwargs["max_stock"]
         }
         environment = self.env(config=env_config)
         env_args = {
@@ -761,11 +779,13 @@ class DRLAgent:
         model = Config(agent_class=agent, env_class=self.env, env_args=env_args)
         model.if_off_policy = model_name in OFF_POLICY_MODELS
         if model_kwargs is not None:
+            #model_kwargs = {k: v for v, k in enumerate(model_kwargs)}
             try:
                 model.learning_rate = model_kwargs["learning_rate"]
                 model.batch_size = model_kwargs["batch_size"]
                 model.gamma = model_kwargs["gamma"]
                 model.seed = model_kwargs["seed"]
+                # TODO Alfred check if this scales the internal actor/critic network
                 model.net_dims = model_kwargs["net_dimension"]
                 model.target_step = model_kwargs["target_step"]
                 model.eval_gap = model_kwargs["eval_gap"]
@@ -776,9 +796,14 @@ class DRLAgent:
                 )
         return model
 
+    #@cache.memoize()
     def train_model(self, model, cwd, total_timesteps=5000):
         model.cwd = cwd
         model.break_step = total_timesteps
+
+        # delete old model prior to training new one
+        if os.path.exists(cwd + "/actor.pth"):
+            os.remove(cwd + "/actor.pth")
         train_agent(model)
 
     @staticmethod
@@ -794,6 +819,10 @@ class DRLAgent:
         # load agent
         try:
             cwd = cwd + "/actor.pth"
+            with open(cwd, "rb") as f:
+                digest = hash(f)
+                #digest = hashlib.file_digest(f, "sha256")
+            print(f'hash of actor file: {digest}')
             print(f"| load actor from: {cwd}")
             actor.load_state_dict(
                 torch.load(cwd, map_location=lambda storage, loc: storage)
@@ -809,10 +838,12 @@ class DRLAgent:
         episode_returns = []  # the cumulative_return / initial_account
         # Alfred set the initial total assets
         episode_total_assets = [environment.initial_total_asset]
+        dates = [environment.day]
         with _torch.no_grad():
             # Alfred loop through until max_steps
             for i in range(environment.max_step):
                 # state =     torch.as_tensor(ary_state, dtype=torch.float32, device=self.device)
+                # TODO Alfred Creating a tensor from a list of numpy.ndarrays is extremely slow. Please consider converting the list to a single numpy.ndarray with numpy.array() before converting to a tensor.
                 s_tensor = _torch.as_tensor((state,), dtype=torch.float32, device=device)
                 a_tensor = act(s_tensor)  # action_tanh = act.forward()
                 action = (
@@ -828,6 +859,7 @@ class DRLAgent:
                         ).sum()
                 )
                 episode_total_assets.append(total_asset)
+                dates.append(environment.day)
                 episode_return = total_asset / environment.initial_total_asset
                 episode_returns.append(episode_return)
                 if done:
@@ -835,7 +867,7 @@ class DRLAgent:
         print("Test Finished!")
         # return episode total_assets on testing data
         print("episode_return", episode_return)
-        return episode_total_assets
+        return episode_total_assets, dates
 
 
 # -----------------------------------------------------------------------------------------------------------------------------------------
@@ -850,12 +882,16 @@ from finrl.config import TRAIN_START_DATE
 from finrl.config_tickers import DOW_30_TICKER
 from finrl.meta.data_processor import DataProcessor
 
+#from diskcache import Cache
+import functools
+
+#cache = Cache('/mnt/diskcache/cs221_finrl', EVICTION_POLICY='none')
 # construct environment
 
-
+#@cache.memoize()
+@timeit
+#@cache.memoize()
 def train(
-        start_date,
-        end_date,
         ticker_list,
         data_source,
         time_interval,
@@ -863,39 +899,47 @@ def train(
         drl_lib,
         env,
         model_name,
-        if_vix=True,
+        erl_params,
+        start_date=None,
+        end_date=None,
         **kwargs,
 ):
-    # download data
-    dp = DataProcessor(data_source, **kwargs)
-    data = dp.download_data(ticker_list, start_date, end_date, time_interval)
-    data = dp.clean_data(data)
-    data = dp.add_technical_indicator(data, technical_indicator_list)
-    if if_vix:
-        data = dp.add_vix(data)
+    if data_source == 'local':
+        dp = LocalProcessor() #data_source, tech_indicator=technical_indicator_list, **kwargs)
+        #dp = DataProcessor(data_source, tech_indicator=technical_indicator_list, **kwargs)
     else:
-        data = dp.add_turbulence(data)
-    price_array, tech_array, turbulence_array = dp.df_to_array(data, if_vix)
+        raise NotImplementedError
+    print('started downloading data')
+    data = dp.download_data(ticker_list, start_date, end_date, time_interval)
+    print('finished downloading data')
+    # Alfred need time_interval in the signature for memoization, otherwise will cause error
+    data = dp.clean_data(data, start_date, end_date, time_interval)
+    data = dp.add_technical_indicator(data, technical_indicator_list)
+
+
+    price_array, tech_array = dp.df_to_array(data, technical_indicator_list)
     env_config = {
         "price_array": price_array,
         "tech_array": tech_array,
-        "turbulence_array": turbulence_array,
         "if_train": True,
+        "initial_capital": erl_params["initial_capital"],
+        "max_stock": erl_params["max_stock"]
     }
     env_instance = env(config=env_config)
 
     # read parameters
     cwd = kwargs.get("cwd", "./" + str(model_name))
 
+
     if drl_lib == "elegantrl":
         DRLAgent_erl = DRLAgent
         break_step = kwargs.get("break_step", 1e6)
-        erl_params = kwargs.get("erl_params")
+        #erl_params = {k: v for v, k in enumerate(erl_params)} # kwargs.get("erl_params")
         agent = DRLAgent_erl(
             env=env,
             price_array=price_array,
             tech_array=tech_array,
-            turbulence_array=turbulence_array,
+            #turbulence_array=turbulence_array,
         )
         model = agent.get_model(model_name, model_kwargs=erl_params)
         trained_model = agent.train_model(
@@ -912,9 +956,8 @@ from finrl.config import TEST_START_DATE
 from finrl.config_tickers import DOW_30_TICKER
 
 
+#@cache.memoize()
 def test(
-        start_date,
-        end_date,
         ticker_list,
         data_source,
         time_interval,
@@ -922,29 +965,42 @@ def test(
         drl_lib,
         env,
         model_name,
-        if_vix=True,
+        initial_capital,
+        max_stock,
+        start_date=None,
+        end_date=None,
         **kwargs,
 ):
     # import data processor
     from finrl.meta.data_processor import DataProcessor
 
     # fetch data
-    dp = DataProcessor(data_source, **kwargs)
+    if data_source == 'local':
+        dp = LocalProcessor() #data_source, tech_indicator=technical_indicator_list, **kwargs)
+    #dp = DataProcessor(data_source, tech_indicator=technical_indicator_list, **kwargs)
+    else:
+        raise NotImplementedError
+    # TODO Alfred this does not cache since it passes the self argument and the object is always instantiated at a different address
+    # Alfred use separate cache with key only on the passed parameters
+    #key = (ticker_list, start_date, end_date, time_interval)
+    #result = cache_data.get(key, default=diskcache.core.ENOVAL, retry=True)
+    #if result is diskcache.core.ENOVAL:
     data = dp.download_data(ticker_list, start_date, end_date, time_interval)
-    data = dp.clean_data(data)
+    #    cache_data[key] = data
+    #else:
+    #    data = cache_data[key]
+    data = dp.clean_data(data, start_date, end_date, time_interval)
     data = dp.add_technical_indicator(data, technical_indicator_list)
 
-    if if_vix:
-        data = dp.add_vix(data)
-    else:
-        data = dp.add_turbulence(data)
-    price_array, tech_array, turbulence_array = dp.df_to_array(data, if_vix)
+    price_array, tech_array = dp.df_to_array(data, technical_indicator_list)
 
     env_config = {
         "price_array": price_array,
         "tech_array": tech_array,
-        "turbulence_array": turbulence_array,
+        #"turbulence_array": turbulence_array,
         "if_train": False,
+        "initial_capital": initial_capital,
+        "max_stock": max_stock
     }
     env_instance = env(config=env_config)
 
@@ -955,13 +1011,13 @@ def test(
 
     if drl_lib == "elegantrl":
         DRLAgent_erl = DRLAgent
-        episode_total_assets = DRLAgent_erl.DRL_prediction(
+        episode_total_assets, dates = DRLAgent_erl.DRL_prediction(
             model_name=model_name,
             cwd=cwd,
             net_dimension=net_dimension,
             environment=env_instance,
         )
-        return episode_total_assets
+        return episode_total_assets, dates, data
 
 
 # -----------------------------------------------------------------------------------------------------------------------------------------
@@ -981,8 +1037,11 @@ import matplotlib.pyplot as plt
 
 def get_trading_days(start, end):
     nyse = tc.get_calendar("NYSE")
+    #start_timestamp = pd.Timestamp(start, tz=pytz.UTC)
+    #end_timestamp = pd.Timestamp(end, tz=pytz.UTC)
     df = nyse.sessions_in_range(
-        pd.Timestamp(start, tz=pytz.UTC), pd.Timestamp(end, tz=pytz.UTC)
+        start, end
+        #start_timestamp, end_timestamp
     )
     trading_days = []
     for day in df:
@@ -1007,7 +1066,7 @@ def alpaca_history(key, secret, url, start, end):
 
 
 def DIA_history(start):
-    data_df = yf.download(["^DJI"], start=start, interval="5m")
+    data_df = yf.download(["^DJI"], start=start, interval="1m")
     data_df = data_df.iloc[:]
     baseline_returns = data_df["Adj Close"].values / data_df["Adj Close"].values[0]
     return data_df, baseline_returns

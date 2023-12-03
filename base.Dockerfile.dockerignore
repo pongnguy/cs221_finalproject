@@ -1,0 +1,8 @@
+# excludes all files/directories
+*Dockerfile
+*docker-compose.yml
+datasets
+diskcache
+results
+artifacts
+!base.Dockerfile.dockerignore

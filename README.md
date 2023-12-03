@@ -1,6 +1,4 @@
-# (CS221 edited) FinRL: Financial Reinforcement Learning [![twitter][1.1]][1] [![facebook][1.2]][2] [![google+][1.3]][3] [![linkedin][1.4]][4]
-
-Purple
+# FinRL: Financial Reinforcement Learning [![twitter][1.1]][1] [![facebook][1.2]][2] [![google+][1.3]][3] [![linkedin][1.4]][4]
 
 [1.1]: http://www.tensorlet.org/wp-content/uploads/2021/01/button_twitter_22x22.png
 [1.2]: http://www.tensorlet.org/wp-content/uploads/2021/01/facebook-button_22x22.png
@@ -40,6 +38,35 @@ Check out our latest competition: [ACM ICAIF 2023 FinRL Contest](https://finrl-c
 | 1.0 (Proof-of-Concept)| full-stack | developers | [this repo](https://github.com/AI4Finance-Foundation/FinRL) | automatic pipeline |
 | 2.0 (Professional) | profession | experts | [ElegantRL](https://github.com/AI4Finance-Foundation/ElegantRL) | algorithms |
 | 3.0 (Production) | service | hedge funds | [Podracer](https://github.com/AI4Finance-Foundation/FinRL_Podracer) | cloud-native deployment |
+
+
+## CS221 Final Project
+
+Various changes were introduced to *FinRL_PaperTrading_Demo_refactored.py*, and the paper-trading was split off into *load_FinRL_PaperTrading_Demo_refactored.py*:
+* using Local data from *train.csv* and *trade.csv* which was generated from *Stock_NeurIPS2018_2_Train.ipynb*.  The original file would download from Alpaca every time and was slow.  The local data is daily data with no option for training on minute data.
+* doing hyperparameter tuning with Optuna.  It does a *single* train + test, for each selected combination of hyperparameters
+* running in Docker container for training and paper trading.  Changing the models and training can break the paper trading coding, but the previously built image will still work for paper trading.
+
+### Quick start
+
+1. Spin up local postgres database and execute two workers:
+```bash
+# build images
+docker build -f base.Dockerfile -t cs221:base .
+docker build -f train.Dockerfile -t cs221:train .
+docker build -f trade.Dockerfile -t cs221:trade .
+
+# create local compose network
+docker network create cs221_finrl
+
+# spin up postgres and two training containers
+docker compose -f train.docker-compose.yml --scale worker=2 
+```
+
+### Normal start
+
+1. Run *FinRL_PaperTrading_Demo_refactored.py* for training the RL agent (only PPO is implemented using elegantRL).
+2. Run *load_FinRL_PaperTrading_Demo_refactored.py* for paper trading which uses the best model from the optuna training (might break if the training was not run in docker-compose with *artifacts* volume)
 
 
 ## Outline

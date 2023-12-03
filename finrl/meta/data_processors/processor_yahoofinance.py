@@ -19,11 +19,12 @@ import pandas as pd
 import pytz
 import yfinance as yf
 from stockstats import StockDataFrame as Sdf
+from finrl.meta.data_processor import DataProcessor
 
 import dill
 import os.path
 
-class YahooFinanceProcessor:
+class YahooFinanceProcessor(DataProcessor):
     """Provides methods for retrieving daily stock data from
     Yahoo Finance API
     """
@@ -274,12 +275,12 @@ class YahooFinanceProcessor:
 
         if os.path.isfile('vix.pkl'):
             with open('vix.pkl', 'rb') as f:
-                print('load dill')
+                print('load dill vix')
                 vix_df_load = dill.load(f)
         else:
             vix_df_load = self.download_data(["VIXY"], self.start, self.end, self.time_interval)
             with open('vix.pkl', 'wb') as f:
-                print('write dill')
+                print('write dill vix')
                 dill.dump(vix_df_load, f)
         vix_df = vix_df_load
         cleaned_vix = self.clean_data(vix_df, start, end)

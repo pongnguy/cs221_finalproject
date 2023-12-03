@@ -9,9 +9,9 @@ import pandas as pd
 from func import calc_all_filenames
 from func import date2str
 from func import remove_all_files
+from finrl.meta.data_processor import DataProcessor
 
-
-class JoinQuantEngineer:
+class JoinQuantEngineer(DataProcessor):
     def __init__(self):
         pass
 

@@ -7,7 +7,7 @@ import threading
 import time
 
 import alpaca_trade_api as tradeapi
-import gym
+import gymnasium as gym
 import numpy as np
 import pandas as pd
 import torch
@@ -31,8 +31,8 @@ class PaperTradingAlpaca:
         API_SECRET,
         API_BASE_URL,
         tech_indicator_list,
+        max_stock,
         turbulence_thresh=30,
-        max_stock=1e2,
         latency=None,
     ):
         # load agent
@@ -154,7 +154,7 @@ class PaperTradingAlpaca:
         self.awaitMarketOpen()
         print("Market opened.")
         iterations = 0
-        maxIterations = 2
+        #maxIterations = 2
         while True:
             # Figure out when the market will close so we can prepare to sell beforehand.
             clock = self.alpaca.get_clock()
@@ -166,7 +166,7 @@ class PaperTradingAlpaca:
             iterations += 1
             print('iteration: ', iterations)
 
-            if self.timeToClose < (60 * 2) or iterations > maxIterations:
+            if self.timeToClose < (60 * 2): # or iterations > maxIterations:
                 # Close all positions when 2 minutes til market close.  Any less and it will be in danger of not closing positions in time.
 
                 print("Market closing soon.  Closing positions.")
@@ -191,19 +191,24 @@ class PaperTradingAlpaca:
 
                 # Run script again after market close for next trading day.
                 # TODO Alfred break loop
-                break
-                #print("Sleeping until market close (15 minutes).")
-                #time.sleep(60 * 15)
+                #break
+                #print("Exiting at market close")
+                print("Sleeping until market close (15 minutes).")
+                time.sleep(60 * 15)
 
             else:
-                self.trade()
-                last_equity = float(self.alpaca.get_account().last_equity)
-                cur_time = time.time()
-                self.equities.append([cur_time, last_equity])
-                print('sleep for seconds ', self.time_interval)
-                #print('sleep for seconds ', str(60))
-                # only sleep for 1 minute
-                #time.sleep(60)
+                try:
+                    self.trade()
+                    last_equity = float(self.alpaca.get_account().last_equity)
+                    cur_time = time.time()
+                    self.equities.append([cur_time, last_equity])
+                    print('sleep for seconds ', self.time_interval)
+                    #print('sleep for seconds ', str(60))
+                    # only sleep for 1 minute
+                    #time.sleep(60)
+                except ConnectionError:
+                    # not sure how to handle not able to trade
+                    raise NotImplementedError("Error handling for lost connection not yet implemented")
                 time.sleep(self.time_interval)
 
     def awaitMarketOpen(self):
@@ -227,7 +232,8 @@ class PaperTradingAlpaca:
                 s_tensor = torch.as_tensor((state,), device=self.device)
                 a_tensor = self.act(s_tensor)
                 action = a_tensor.detach().cpu().numpy()[0]
-            action = (action * self.max_stock).astype(int)
+            #action = (action * self.max_stock).astype(int)
+            action = (action * self.max_stock)
 
         elif self.drl_lib == "rllib":
             action = self.agent.compute_single_action(state)
@@ -311,16 +317,16 @@ class PaperTradingAlpaca:
 
     def get_state(self):
         alpaca = AlpacaProcessor(api=self.alpaca)
-        price, tech, turbulence = alpaca.fetch_latest_data(
+        price, tech = alpaca.fetch_latest_data(
             ticker_list=self.stockUniverse,
             time_interval="1Min",
             tech_indicator_list=self.tech_indicator_list,
         )
-        turbulence_bool = 1 if turbulence >= self.turbulence_thresh else 0
+        turbulence_bool = 0 #1 if turbulence >= self.turbulence_thresh else 0
 
-        turbulence = (
-            self.sigmoid_sign(turbulence, self.turbulence_thresh) * 2**-5
-        ).astype(np.float32)
+        #turbulence = (
+        #    self.sigmoid_sign(turbulence, self.turbulence_thresh) * 2**-5
+        #).astype(np.float32)
 
         tech = tech * 2**-7
         positions = self.alpaca.list_positions()
@@ -333,7 +339,8 @@ class PaperTradingAlpaca:
         cash = float(self.alpaca.get_account().cash)
         self.cash = cash
         self.stocks = stocks
-        self.turbulence_bool = turbulence_bool
+        self.turbulence_bool = 0
+        #self.turbulence_bool = turbulence_bool
         self.price = price
 
         amount = np.array(self.cash * (2**-12), dtype=np.float32)
@@ -341,8 +348,8 @@ class PaperTradingAlpaca:
         state = np.hstack(
             (
                 amount,
-                turbulence,
-                self.turbulence_bool,
+                #turbulence,
+                #self.turbulence_bool,
                 price * scale,
                 self.stocks * scale,
                 self.stocks_cd,

@@ -1,0 +1,7 @@
+# excludes all files/directories
+*/*
+*.*
+
+!finrl/*
+!examples/*
+!train.Dockerfile

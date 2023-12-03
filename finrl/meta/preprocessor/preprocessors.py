@@ -10,6 +10,7 @@ from stockstats import StockDataFrame as Sdf
 from finrl import config
 from finrl.meta.preprocessor.yahoodownloader import YahooDownloader
 
+from finrl.meta.paper_trading.utilities import memoize
 
 def load_dataset(*, file_name: str) -> pd.DataFrame:
     """
