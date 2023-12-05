@@ -13,6 +13,7 @@ from typing import Type
 from typing import TypeVar
 from typing import Union
 
+import exchange_calendars
 import exchange_calendars as tc
 import numpy as np
 import pandas as pd
@@ -121,18 +122,24 @@ class LocalProcessor(DataProcessor):
         self.end = end_date
         self.time_interval = time_interval
 
-        train = pd.read_csv('./train_data.csv')
-        train = train.set_index(train.columns[0])
-        train.index.names = ['']
+        # create time index
+        #calendar = exchange_calendars.get_calendar('NYSE',Timestamp(start_date), Timestamp(end_date), "both")
 
-        trade = pd.read_csv('./trade_data.csv')
-        trade = trade.set_index(trade.columns[0])
-        trade.index.names = ['']
+        if time_interval != "1D":
+            raise NotImplementedError("Time interval is hardcoded for 1D based on downloaded data")
 
-        dataframes = [train, trade]
-        result = pd.concat(dataframes)
-
-        return result
+        if (start_date == '2009-01-02' and end_date == '2020-06-30'):
+            train = pd.read_csv('./train_data.csv')
+            train = train.set_index(train.columns[0])
+            train.index.names = ['']
+            return train
+        elif (start_date == '2020-07-01' and end_date == '2021-10-27'):
+            trade = pd.read_csv('./trade_data.csv')
+            trade = trade.set_index(trade.columns[0])
+            trade.index.names = ['']
+            return trade
+        else:
+            raise NotImplementedError("Local data download hardcoded for start_date 2009-01-02 and end_date 2020-06-30, or start_date 2020-07-01 and end_date 2021-10-27")
 
 
     def convert_interval(self, time_interval: str) -> str:
