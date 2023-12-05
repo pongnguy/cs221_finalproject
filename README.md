@@ -61,6 +61,9 @@ docker network create cs221_finrl
 
 # spin up postgres and two training containers
 docker compose -f train.docker-compose.yml --scale worker=2 
+
+# to kill the training early, or to clean up (results saved in postgres database)
+docker compose -f train.docker-compose.yml down
 ```
 
 ### Normal start
