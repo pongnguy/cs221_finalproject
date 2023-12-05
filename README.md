@@ -65,8 +65,24 @@ docker compose -f train.docker-compose.yml --scale worker=2
 
 ### Normal start
 
+These instructions assume a linux machine, and are for partially setting up the local environment 
+
+```bash
+# add postgres to hosts
+echo "127.0.0.1       postgres1" | sudo tee -a /etc/hosts
+
+# create local artifacts directory
+sudo mkdir /mnt/artifacts
+
+# set environmental variables
+export N_TRIALS=100
+
+# spin up postgres
+docker compose -f train.docker-compose.yml up postgres
+```
+
 1. Run *FinRL_PaperTrading_Demo_refactored.py* for training the RL agent (only PPO is implemented using elegantRL).
-2. Run *load_FinRL_PaperTrading_Demo_refactored.py* for paper trading which uses the best model from the optuna training (might break if the training was not run in docker-compose with *artifacts* volume)
+2. Run *load_FinRL_PaperTrading_Demo_refactored.py* for paper trading which uses the best model from the optuna training (will break if the best model was obtained in docker-compose with *artifacts* volume)
 
 
 ## Outline
