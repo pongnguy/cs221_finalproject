@@ -102,10 +102,10 @@ from optuna import Trial, create_study, visualization
 # TODO Alfred upload artifacts in minio local object storage
 from optuna.artifacts import FileSystemArtifactStore, Boto3ArtifactStore, GCSArtifactStore
 from optuna.artifacts import upload_artifact
-#base_path = "/mnt/artifacts"
-#os.makedirs(base_path, exist_ok=True)
-#artifact_store = FileSystemArtifactStore(base_path=base_path)
-artifact_store = GCSArtifactStore("optuna_artifacts")
+base_path = "/mnt/artifacts"
+os.makedirs(base_path, exist_ok=True)
+artifact_store = FileSystemArtifactStore(base_path=base_path)
+#artifact_store = GCSArtifactStore("optuna_artifacts")
 
 # 1. Define the Objective Function
 def objective(trial: Trial):
@@ -142,37 +142,37 @@ def objective(trial: Trial):
     }
 
     # Alfred train with local data without specifying start/end data
-    with NamedTemporaryFile(suffix=".txt") as output_file:
+    #with NamedTemporaryFile(suffix=".txt") as output_file:
     #with open('output.txt', "w") as h, contextlib.redirect_stdout(h):
-        actor_statedict = train(
-            start_date='2009-01-02',
-            end_date='2020-06-30',
-            ticker_list=ticker_list,
-            data_source="local",
-            time_interval=TRAIN_TIMEINTERVAL,
-            technical_indicator_list=INDICATORS,
-            drl_lib="elegantrl",
-            env=env,
-            model_name="ppo",
-            # API_KEY=DATA_API_KEY,
-            # API_SECRET=DATA_API_SECRET,
-            # API_BASE_URL=DATA_API_BASE_URL,
-            erl_params=ERL_PARAMS,
-            #cwd="./papertrading_erl",  # current_working_dir
-            break_step=1e5,
-        )
+    actor_statedict = train(
+        start_date='2009-01-02',
+        end_date='2020-06-30',
+        ticker_list=ticker_list,
+        data_source="local",
+        time_interval=TRAIN_TIMEINTERVAL,
+        technical_indicator_list=INDICATORS,
+        drl_lib="elegantrl",
+        env=env,
+        model_name="ppo",
+        # API_KEY=DATA_API_KEY,
+        # API_SECRET=DATA_API_SECRET,
+        # API_BASE_URL=DATA_API_BASE_URL,
+        erl_params=ERL_PARAMS,
+        #cwd="./papertrading_erl",  # current_working_dir
+        break_step=1e5,
+    )
 
         # print out all the output after finished training
         #with open("output.txt", 'r') as f:
         #    print(f.read())
-        print(output_file.readlines())
+        #print(output_file.readlines())
         #file_path = 'output.txt'
-        artifact_id_output = upload_artifact(
-            trial, output_file.name, artifact_store
-        )  # The return value is the artifact ID.
-        trial.set_user_attr(
-            "artifact_id_output", artifact_id_output
-        )  # Save the ID in RDB so that it can be referenced later
+        #artifact_id_output = upload_artifact(
+        #    trial, output_file.name, artifact_store
+        #)  # The return value is the artifact ID.
+        #trial.set_user_attr(
+        #    "artifact_id_output", artifact_id_output
+        #)  # Save the ID in RDB so that it can be referenced later
 
     MODEL_DESCRIPTION='PPO-standard'
     # save the generated actor with the trial
@@ -254,7 +254,7 @@ def objective(trial: Trial):
 
 
 # 2. Create a Study Object
-storage_name = "postgresql://alfred:Cc17931793@127.0.0.1:5432/optuna_db"
+storage_name = "postgresql://alfred:Cc17931793@postgres:5432/optuna_db"
 study = create_study(direction='maximize', study_name='cs221_finrl', storage=storage_name, load_if_exists=True)
 
 N_TRIALS = int(os.getenv('N_TRIALS'))

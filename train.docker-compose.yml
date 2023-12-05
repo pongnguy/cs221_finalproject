@@ -21,6 +21,8 @@ services:
       - CHOWN_HOME=yes
       - CHOWN_HOME_OPTS='-R'
       - CHOWN_EXTRA_OPTS='-R'
+      - N_TRIALS=100
+      - N_PROCESSES=1
     networks:
       - cs221_finrl
 
