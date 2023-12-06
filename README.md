@@ -69,6 +69,8 @@ docker compose -f train.docker-compose.yml --scale worker=2
 
 ```bash
 sudo apt-get install swig build-essential python3-dev
+conda env create -n FinRL4 -f FinRL4.environment.yml
+conda activate FinRL4
 
 # install finrl package as local
 pip install -e .

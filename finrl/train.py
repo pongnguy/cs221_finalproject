@@ -10,7 +10,7 @@ from finrl.config_tickers import DOW_30_TICKER
 from finrl.meta.data_processor import DataProcessor
 from finrl.meta.env_stock_trading.env_stocktrading_np import StockTradingEnv
 
-import dill
+#import dill
 import os.path
 
 # construct environment
