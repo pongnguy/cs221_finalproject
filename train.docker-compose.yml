@@ -2,17 +2,17 @@ version: "3.8"
 
 services:
   worker:
-    image: cs221:train
+    image: dzcr:train
     build:
       context: .
       dockerfile: train.Dockerfile
     #container_name: optuna_worker
     #ports:
     #  - 8888:8888
-    volumes:
+    #volumes:
     #  - ./:/workspace
     #  - diskcache:/mnt/diskcache
-      - artifacts:/mnt/artifacts
+    #  - artifacts:/mnt/artifacts
     environment:
       - JUPYTER_ENABLE_LAB=yes
       - GRANT_SUDO=yes
@@ -21,17 +21,20 @@ services:
       - CHOWN_HOME=yes
       - CHOWN_HOME_OPTS='-R'
       - CHOWN_EXTRA_OPTS='-R'
-      - N_TRIALS=100
-      - N_PROCESSES=1
+      - N_TRIALS=${N_TRIALS:-100}
+      - N_PROCESSES=${N_PROCESSES:-2}
+      - POSTGRES_HOST=postgres
     networks:
       - cs221_finrl
 
   postgres:
     image: postgres:14-alpine
+    # Alfred for allowing more workers
+    command: postgres -c 'max_connections=400'
     ports:
       - 5432:5432
     volumes:
-      - optuna-postgres:/var/lib/postgresql/data
+      - optuna-postgres-bv1:/var/lib/postgresql/data
     environment:
       - POSTGRES_PASSWORD=Cc17931793
       - POSTGRES_USER=alfred
@@ -40,7 +43,8 @@ services:
       - cs221_finrl
 
 volumes:
-    optuna-postgres:
+    optuna-postgres-bv1:
+      external: true
     artifacts:
     #diskcache:
 

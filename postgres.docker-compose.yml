@@ -1,0 +1,25 @@
+version: "3.8"
+
+services:
+  postgres:
+    image: postgres:14-alpine
+    ports:
+      - 5433:5432
+    volumes:
+      - optuna-postgres-bv:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_PASSWORD=Cc17931793
+      - POSTGRES_USER=alfred
+      - POSTGRES_DB=optuna_db
+    networks:
+      - cs221_finrl
+
+volumes:
+    optuna-postgres-bv:
+      external: true
+    #artifacts:
+    #diskcache:
+
+networks:
+  cs221_finrl:
+    external: true

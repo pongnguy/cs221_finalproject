@@ -16,6 +16,7 @@ import torch
 import torch.nn as nn
 from torch import Tensor
 from torch.distributions.normal import Normal
+from collections import OrderedDict
 
 from finrl.config import INDICATORS
 from finrl.config_tickers import DOW_30_TICKER
@@ -25,14 +26,12 @@ from finrl.plot import backtest_plot
 from finrl.plot import backtest_stats
 from finrl.plot import get_baseline
 from finrl.plot import get_daily_return
+#from finrl.agents.elegantrl.models import DRLAgent as DRLAgent_erl
 
 from finrl.meta.paper_trading.utilities import timeit, memoize, hash_file
 #from diskcache import Cache
 from finrl.meta.data_processors.processor_local import LocalProcessor
 import io, hashlib, hmac
-
-#cache = Cache('/mnt/diskcache/cs221_finrl', EVICTION_POLICY='none')
-#cache_data = Cache('/mnt/diskcache/data', EVICTION_POLICY='none')
 
 class HashableDict(dict):
     def __hash__(self):
@@ -402,150 +401,6 @@ class AgentPPO(AgentBase):
         return advantages
 
 # TODO Alfred WIP
-class AgentTD3(AgentBase):
-    def __init__(
-            self,
-            net_dims: [int],
-            state_dim: int,
-            action_dim: int,
-            gpu_id: int = 0,
-            args: Config = Config(),
-    ):
-        self.if_off_policy = True
-        self.act_class = getattr(self, "act_class", ActorPPO)
-        self.cri_class = getattr(self, "cri_class", CriticPPO)
-        AgentBase.__init__(self, net_dims, state_dim, action_dim, gpu_id, args)
-
-        self.ratio_clip = getattr(
-            args, "ratio_clip", 0.25
-        )  # `ratio.clamp(1 - clip, 1 + clip)`
-        self.lambda_gae_adv = getattr(
-            args, "lambda_gae_adv", 0.95
-        )  # could be 0.80~0.99
-        self.lambda_entropy = getattr(
-            args, "lambda_entropy", 0.01
-        )  # could be 0.00~0.10
-        self.lambda_entropy = torch.tensor(
-            self.lambda_entropy, dtype=torch.float32, device=self.device
-        )
-
-    def explore_env(self, env, horizon_len: int) -> [Tensor]:
-        states = torch.zeros((horizon_len, self.state_dim), dtype=torch.float32).to(
-            self.device
-        )
-        actions = torch.zeros((horizon_len, self.action_dim), dtype=torch.float32).to(
-            self.device
-        )
-        logprobs = torch.zeros(horizon_len, dtype=torch.float32).to(self.device)
-        rewards = torch.zeros(horizon_len, dtype=torch.float32).to(self.device)
-        dones = torch.zeros(horizon_len, dtype=torch.bool).to(self.device)
-
-        ary_state = self.states[0]
-
-        get_action = self.act.get_action
-        convert = self.act.convert_action_for_env
-        for i in range(horizon_len):
-            # print(f"ar_state: {type(ary_state)}")
-            state = torch.as_tensor(ary_state, dtype=torch.float32, device=self.device)
-            action, logprob = (t.squeeze(0) for t in get_action(state.unsqueeze(0))[:2])
-
-            ary_action = convert(action).detach().cpu().numpy()
-            ary_state, reward, done, extra, _ = env.step(ary_action)
-            # print(f'Unpacking Values: done: {done}, extra: {extra}')
-            if done:
-                ary_state = env.reset()[0]
-
-            states[i] = state
-            actions[i] = action
-            logprobs[i] = logprob
-            rewards[i] = reward
-            dones[i] = done
-
-        self.states[0] = ary_state
-        rewards = (rewards * self.reward_scale).unsqueeze(1)
-        undones = (1 - dones.type(torch.float32)).unsqueeze(1)
-        return states, actions, logprobs, rewards, undones
-
-    def update_net(self, buffer) -> [float]:
-        with torch.no_grad():
-            states, actions, logprobs, rewards, undones = buffer
-            buffer_size = states.shape[0]
-
-            """get advantages reward_sums"""
-            bs = 2**10  # set a smaller 'batch_size' when out of GPU memory.
-            values = [self.cri(states[i : i + bs]) for i in range(0, buffer_size, bs)]
-            values = torch.cat(values, dim=0).squeeze(
-                1
-            )  # values.shape == (buffer_size, )
-
-            advantages = self.get_advantages(
-                rewards, undones, values
-            )  # advantages.shape == (buffer_size, )
-            reward_sums = advantages + values  # reward_sums.shape == (buffer_size, )
-            del rewards, undones, values
-
-            advantages = (advantages - advantages.mean()) / (
-                    advantages.std(dim=0) + 1e-5
-            )
-        assert logprobs.shape == advantages.shape == reward_sums.shape == (buffer_size,)
-
-        """update network"""
-        obj_critics = 0.0
-        obj_actors = 0.0
-
-        update_times = int(buffer_size * self.repeat_times / self.batch_size)
-        assert update_times >= 1
-        for _ in range(update_times):
-            indices = torch.randint(
-                buffer_size, size=(self.batch_size,), requires_grad=False
-            )
-            state = states[indices]
-            action = actions[indices]
-            logprob = logprobs[indices]
-            advantage = advantages[indices]
-            reward_sum = reward_sums[indices]
-
-            value = self.cri(state).squeeze(
-                1
-            )  # critic network predicts the reward_sum (Q value) of state
-            obj_critic = self.criterion(value, reward_sum)
-            self.optimizer_update(self.cri_optimizer, obj_critic)
-
-            new_logprob, obj_entropy = self.act.get_logprob_entropy(state, action)
-            ratio = (new_logprob - logprob.detach()).exp()
-            surrogate1 = advantage * ratio
-            surrogate2 = advantage * ratio.clamp(
-                1 - self.ratio_clip, 1 + self.ratio_clip
-            )
-            obj_surrogate = torch.min(surrogate1, surrogate2).mean()
-
-            obj_actor = obj_surrogate + obj_entropy.mean() * self.lambda_entropy
-            self.optimizer_update(self.act_optimizer, -obj_actor)
-
-            obj_critics += obj_critic.item()
-            obj_actors += obj_actor.item()
-        a_std_log = getattr(self.act, "a_std_log", torch.zeros(1)).mean()
-        return obj_critics / update_times, obj_actors / update_times, a_std_log.item()
-
-    def get_advantages(
-            self, rewards: Tensor, undones: Tensor, values: Tensor
-    ) -> Tensor:
-        advantages = torch.empty_like(values)  # advantage value
-
-        masks = undones * self.gamma
-        horizon_len = rewards.shape[0]
-
-        next_state = torch.tensor(self.states, dtype=torch.float32).to(self.device)
-        next_value = self.cri(next_state).detach()[0, 0]
-
-        advantage = 0  # last_gae_lambda
-        for t in range(horizon_len - 1, -1, -1):
-            delta = rewards[t] + masks[t] * next_value - values[t]
-            advantages[t] = advantage = (
-                    delta + masks[t] * self.lambda_gae_adv * advantage
-            )
-            next_value = values[t]
-        return advantages
 
 
 class PendulumEnv(gym.Wrapper):  # a demo of custom gym env
@@ -576,7 +431,7 @@ class PendulumEnv(gym.Wrapper):  # a demo of custom gym env
         return state.reshape(self.state_dim), float(reward), done, info_dict
 
 
-def train_agent(args: Config):
+def train_agent(args: Config) -> OrderedDict:
     args.init_before_training()
 
     env = build_env(args.env_class, args.env_args)
@@ -603,8 +458,9 @@ def train_agent(args: Config):
         if (evaluator.total_step > args.break_step) or os.path.exists(
                 f"{args.cwd}/stop"
         ):
-            torch.save(agent.act.state_dict(), args.cwd + "/actor.pth")
-            break  # stop training when reach `break_step` or `mkdir cwd/stop`
+            #torch.save(agent.act.state_dict(), args.cwd + "/actor.pth")
+            #break  # stop training when reach `break_step` or `mkdir cwd/stop`
+            return agent.act.state_dict()
 
 
 def render_agent(
@@ -729,6 +585,7 @@ ON_POLICY_MODELS = ["ppo"]
 #     "ornstein_uhlenbeck": OrnsteinUhlenbeckActionNoise,
 # }
 
+# Alfred why not using the FinRL DRLAgent for elegantRL
 
 class DRLAgent:
     """Implementations of DRL algorithms
@@ -746,10 +603,6 @@ class DRLAgent:
         DRL_prediction()
             make a prediction in a test dataset and get results
     """
-    #def __hash__(self):
-    #    # Alfred some of these might be unhashable
-    #    return hash(self.env) + hash(self.price_array) + hash(self.tech_array) + hash(self.turbulence_array)
-
     def __init__(self, env, price_array, tech_array):
         self.env = env
         self.price_array = price_array
@@ -797,17 +650,18 @@ class DRLAgent:
         return model
 
     #@cache.memoize()
-    def train_model(self, model, cwd, total_timesteps=5000):
+    def train_model(self, model, cwd, total_timesteps=5000) -> OrderedDict:
         model.cwd = cwd
         model.break_step = total_timesteps
 
         # delete old model prior to training new one
-        if os.path.exists(cwd + "/actor.pth"):
-            os.remove(cwd + "/actor.pth")
-        train_agent(model)
+        #if os.path.exists(cwd + "/actor.pth"):
+        #    os.remove(cwd + "/actor.pth")
+        trained_model_statedict = train_agent(model)
+        return trained_model_statedict
 
     @staticmethod
-    def DRL_prediction(model_name, cwd, net_dimension, environment):
+    def DRL_prediction(model_name, actor_statedict, net_dimension, environment):
         if model_name not in MODELS:
             raise NotImplementedError("NotImplementedError")
         agent_class = MODELS[model_name]
@@ -818,15 +672,15 @@ class DRLAgent:
         actor = agent.act
         # load agent
         try:
-            cwd = cwd + "/actor.pth"
-            with open(cwd, "rb") as f:
-                digest = hash(f)
-                #digest = hashlib.file_digest(f, "sha256")
-            print(f'hash of actor file: {digest}')
-            print(f"| load actor from: {cwd}")
-            actor.load_state_dict(
-                torch.load(cwd, map_location=lambda storage, loc: storage)
-            )
+            #cwd = cwd + "/actor.pth"
+            #with open(cwd, "rb") as f:
+            #    digest = hash(f)
+            #    #digest = hashlib.file_digest(f, "sha256")
+            #print(f'hash of actor file: {digest}')
+            #print(f"| load actor from: {cwd}")
+            actor.load_state_dict(actor_statedict)
+            #    torch.load(cwd, map_location=lambda storage, loc: storage)
+            #)
             act = actor
             device = agent.device
         except BaseException:
@@ -900,10 +754,10 @@ def train(
         env,
         model_name,
         erl_params,
-        start_date=None,
-        end_date=None,
+        start_date,
+        end_date,
         **kwargs,
-):
+) -> OrderedDict:
     if data_source == 'local':
         dp = LocalProcessor() #data_source, tech_indicator=technical_indicator_list, **kwargs)
         #dp = DataProcessor(data_source, tech_indicator=technical_indicator_list, **kwargs)
@@ -935,6 +789,8 @@ def train(
         DRLAgent_erl = DRLAgent
         break_step = kwargs.get("break_step", 1e6)
         #erl_params = {k: v for v, k in enumerate(erl_params)} # kwargs.get("erl_params")
+        # finrl.meta.paper_trading.common.DRLAgent_erl
+        # finrl.agents.elegantrl.models.DRLAgent
         agent = DRLAgent_erl(
             env=env,
             price_array=price_array,
@@ -942,12 +798,15 @@ def train(
             #turbulence_array=turbulence_array,
         )
         model = agent.get_model(model_name, model_kwargs=erl_params)
-        trained_model = agent.train_model(
+        trained_model_statedict = agent.train_model(
             model=model, cwd=cwd, total_timesteps=break_step
         )
+        return trained_model_statedict
+    else:
+        raise NotImplementedError("Other DRL libraries not implemented.")
 
 
-# -----------------------------------------------------------------------------------------------------------------------------------------
+    # -----------------------------------------------------------------------------------------------------------------------------------------
 
 from finrl.config import INDICATORS
 from finrl.config import RLlib_PARAMS
@@ -967,8 +826,9 @@ def test(
         model_name,
         initial_capital,
         max_stock,
-        start_date=None,
-        end_date=None,
+        actor_statedict: OrderedDict,
+        start_date,
+        end_date,
         **kwargs,
 ):
     # import data processor
@@ -1006,18 +866,21 @@ def test(
 
     # load elegantrl needs state dim, action dim and net dim
     net_dimension = kwargs.get("net_dimension", 2**7)
-    cwd = kwargs.get("cwd", "./" + str(model_name))
+    #cwd = kwargs.get("cwd", "./" + str(model_name))
     print("price_array: ", len(price_array))
 
     if drl_lib == "elegantrl":
         DRLAgent_erl = DRLAgent
         episode_total_assets, dates = DRLAgent_erl.DRL_prediction(
             model_name=model_name,
-            cwd=cwd,
+            actor_statedict=actor_statedict,
+            #cwd=cwd,
             net_dimension=net_dimension,
             environment=env_instance,
         )
         return episode_total_assets, dates, data
+    else:
+        raise NotImplementedError("Other DRL libraries not implemented.")
 
 
 # -----------------------------------------------------------------------------------------------------------------------------------------

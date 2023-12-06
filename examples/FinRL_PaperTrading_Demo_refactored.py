@@ -5,15 +5,16 @@
 # Alpaca keys
 from __future__ import annotations
 
-import argparse
-import contextlib
-import functools
+#import argparse
+#import contextlib
+#import functools
+import logging
 
 import subprocess
-import docker
-import numpy as np
-import matplotlib.pyplot as plt
-import json
+#import docker
+#import numpy as np
+#import matplotlib.pyplot as plt
+#import json
 
 #client = docker.from_env()
 #client.containers.run("ubuntu", "echo hello world")
@@ -100,9 +101,9 @@ TEST_END_DATE = '2021-10-27'
 import os
 from optuna import Trial, create_study, visualization
 # TODO Alfred upload artifacts in minio local object storage
-from optuna.artifacts import FileSystemArtifactStore, Boto3ArtifactStore, GCSArtifactStore
+from optuna.artifacts import FileSystemArtifactStore #, Boto3ArtifactStore, GCSArtifactStore
 from optuna.artifacts import upload_artifact
-base_path = "/mnt/artifacts"
+base_path = "./artifacts"
 os.makedirs(base_path, exist_ok=True)
 artifact_store = FileSystemArtifactStore(base_path=base_path)
 #artifact_store = GCSArtifactStore("optuna_artifacts")
@@ -142,122 +143,144 @@ def objective(trial: Trial):
     }
 
     # Alfred train with local data without specifying start/end data
-    #with NamedTemporaryFile(suffix=".txt") as output_file:
+    with NamedTemporaryFile(suffix=".log") as output_file:
+        # initialize new logger for the trial
+        logging.basicConfig(filename=output_file.name,
+                            filemode='w+',
+                            format='%(asctime)s,%(msecs)d %(name)s %(levelname)s %(message)s',
+                            datefmt='%H:%M:%S',
+                            level=logging.INFO)
+    #contextlib.redirect_stdout
     #with open('output.txt', "w") as h, contextlib.redirect_stdout(h):
-    actor_statedict = train(
-        start_date='2009-01-02',
-        end_date='2020-06-30',
-        ticker_list=ticker_list,
-        data_source="local",
-        time_interval=TRAIN_TIMEINTERVAL,
-        technical_indicator_list=INDICATORS,
-        drl_lib="elegantrl",
-        env=env,
-        model_name="ppo",
-        # API_KEY=DATA_API_KEY,
-        # API_SECRET=DATA_API_SECRET,
-        # API_BASE_URL=DATA_API_BASE_URL,
-        erl_params=ERL_PARAMS,
-        #cwd="./papertrading_erl",  # current_working_dir
-        break_step=1e5,
-    )
+        actor_statedict = train(
+            start_date='2009-01-02',
+            end_date='2020-06-30',
+            ticker_list=ticker_list,
+            data_source="local",
+            time_interval=TRAIN_TIMEINTERVAL,
+            technical_indicator_list=INDICATORS,
+            drl_lib="elegantrl",
+            env=env,
+            model_name="ppo",
+            # API_KEY=DATA_API_KEY,
+            # API_SECRET=DATA_API_SECRET,
+            # API_BASE_URL=DATA_API_BASE_URL,
+            erl_params=ERL_PARAMS,
+            #cwd="./papertrading_erl",  # current_working_dir
+            break_step=1e5,
+        )
+
+        MODEL_DESCRIPTION='PPO-standard'
+        # save the generated actor with the trial
+
+        #file_path = 'papertrading_erl/actor.pth'
+        # save actor to temporary file
+        with NamedTemporaryFile(suffix=".pth") as actor_file:
+            torch.save(actor_statedict, actor_file)
+            artifact_id_actor = upload_artifact(
+                trial, actor_file.name, artifact_store
+            )  # The return value is the artifact ID.
+        trial.set_user_attr(
+            "artifact_id_actor", artifact_id_actor
+        )  # Save the ID in RDB so that it can be referenced later
+
+        git_branch = subprocess.check_output(['git', 'rev-parse', '--abbrev-ref', 'HEAD']).decode('ascii').strip()
+        logging.info(f'the git branch is {git_branch}')
+        print(git_branch)
+        trial.set_user_attr(
+            "git_branch", git_branch
+        )
+        git_commit = subprocess.check_output(['git', 'rev-parse', '--short', 'HEAD']).decode('ascii').strip()
+        logging.info(f'the git commit is {git_commit}')
+        print(git_commit)
+        trial.set_user_attr(
+            "git_commit", git_commit
+        )
+        trial.set_user_attr(
+            "model_description", MODEL_DESCRIPTION
+        )
+        trial.set_user_attr(
+            "initial_capital", initial_capital
+        )
+        if os.getenv('PLATFORM') == 'vastai':
+            platform = 'vastai:' + os.getenv('VAST_CONTAINERLABEL')
+        else:
+            platform = os.getenv('PLATFORM')
+        trial.set_user_attr(
+            "platform", platform
+        )
+        trial.set_user_attr(
+            "train_timeinterval", TRAIN_TIMEINTERVAL
+        )
+        trial.set_user_attr(
+            "train_start_date", TRAIN_START_DATE
+        )
+        trial.set_user_attr(
+            "train_end_date", TRAIN_END_DATE
+        )
+
+        TEST_TIMEINTERVAL = "1D"
+        # Alfred test with local data without specifying start/end dates
+        account_value_erl, dates, data = test(
+            start_date='2020-07-01',
+            end_date='2021-10-27',
+            ticker_list=ticker_list,
+            data_source="local",
+            time_interval=TEST_TIMEINTERVAL,
+            technical_indicator_list=INDICATORS,
+            drl_lib="elegantrl",
+            env=env,
+            model_name="ppo",
+            if_vix=True,
+            # API_KEY=DATA_API_KEY,
+            # API_SECRET=DATA_API_SECRET,
+            # API_BASE_URL=DATA_API_BASE_URL,
+            # TODO Alfred pass in file-like object so that can be hashed with custom function?
+            # TODO Alfred might need to create wrapper class and then implement hash function which takes into account file contents
+            actor_statedict=actor_statedict,
+            #cwd="./papertrading_erl",
+            net_dimension=ERL_PARAMS["net_dimension"],
+            initial_capital=ERL_PARAMS["initial_capital"],
+            max_stock=ERL_PARAMS["max_stock"]
+        )
+        trial.set_user_attr(
+            "test_timeinterval", TEST_TIMEINTERVAL
+        )
+        trial.set_user_attr(
+            "test_start_date", TEST_START_DATE
+        )
+        trial.set_user_attr(
+            "test_end_date", TEST_END_DATE
+        )
 
         # print out all the output after finished training
-        #with open("output.txt", 'r') as f:
+        #with open(output_file.name, 'r') as f:
         #    print(f.read())
         #print(output_file.readlines())
         #file_path = 'output.txt'
-        #artifact_id_output = upload_artifact(
-        #    trial, output_file.name, artifact_store
-        #)  # The return value is the artifact ID.
-        #trial.set_user_attr(
-        #    "artifact_id_output", artifact_id_output
-        #)  # Save the ID in RDB so that it can be referenced later
-
-    MODEL_DESCRIPTION='PPO-standard'
-    # save the generated actor with the trial
-
-    #file_path = 'papertrading_erl/actor.pth'
-    # save actor to temporary file
-    with NamedTemporaryFile(suffix=".pth") as actor_file:
-        torch.save(actor_statedict, actor_file)
-        artifact_id_actor = upload_artifact(
-            trial, actor_file.name, artifact_store
+        artifact_id_output = upload_artifact(
+            trial, output_file.name, artifact_store
         )  # The return value is the artifact ID.
-    trial.set_user_attr(
-        "artifact_id_actor", artifact_id_actor
-    )  # Save the ID in RDB so that it can be referenced later
+        trial.set_user_attr(
+            "artifact_id_output", artifact_id_output
+        )  # Save the ID in RDB so that it can be referenced later
 
-    trial.set_user_attr(
-        "git_branch", subprocess.check_output(['git', 'rev-parse', '--abbrev-ref', 'HEAD']).decode('ascii').strip()
-    )
-    trial.set_user_attr(
-        "git_commit", subprocess.check_output(['git', 'rev-parse', '--short', 'HEAD']).decode('ascii').strip()
-    )
-    trial.set_user_attr(
-        "model_description", MODEL_DESCRIPTION
-    )
-    trial.set_user_attr(
-        "initial_capital", initial_capital
-    )
-    if os.getenv('PLATFORM') == 'vastai':
-        platform = 'vastai:' + os.getenv('VAST_CONTAINERLABEL')
-    else:
-        platform = os.getenv('PLATFORM')
-    trial.set_user_attr(
-        "platform", platform
-    )
-    trial.set_user_attr(
-        "train_timeinterval", TRAIN_TIMEINTERVAL
-    )
-    trial.set_user_attr(
-        "train_start_date", TRAIN_START_DATE
-    )
-    trial.set_user_attr(
-        "train_end_date", TRAIN_END_DATE
-    )
-
-    TEST_TIMEINTERVAL = "1D"
-    # Alfred test with local data without specifying start/end dates
-    account_value_erl, dates, data = test(
-        start_date='2020-07-01',
-        end_date='2021-10-27',
-        ticker_list=ticker_list,
-        data_source="local",
-        time_interval=TEST_TIMEINTERVAL,
-        technical_indicator_list=INDICATORS,
-        drl_lib="elegantrl",
-        env=env,
-        model_name="ppo",
-        if_vix=True,
-        # API_KEY=DATA_API_KEY,
-        # API_SECRET=DATA_API_SECRET,
-        # API_BASE_URL=DATA_API_BASE_URL,
-        # TODO Alfred pass in file-like object so that can be hashed with custom function?
-        # TODO Alfred might need to create wrapper class and then implement hash function which takes into account file contents
-        actor_statedict=actor_statedict,
-        #cwd="./papertrading_erl",
-        net_dimension=ERL_PARAMS["net_dimension"],
-        initial_capital=ERL_PARAMS["initial_capital"],
-        max_stock=ERL_PARAMS["max_stock"]
-    )
-    trial.set_user_attr(
-        "test_timeinterval", TEST_TIMEINTERVAL
-    )
-    trial.set_user_attr(
-        "test_start_date", TEST_START_DATE
-    )
-    trial.set_user_attr(
-        "test_end_date", TEST_END_DATE
-    )
     return account_value_erl[-1] / account_value_erl[0]
 
 
 # 2. Create a Study Object
-storage_name = "postgresql://alfred:Cc17931793@postgres:5432/optuna_db"
+POSTGRES_HOST = os.getenv('POSTGRES_HOST')
+if POSTGRES_HOST is None:
+    storage_name = "postgresql://alfred:Cc17931793@127.0.0.1:5432/optuna_db"
+else:
+    storage_name = f'postgresql://alfred:Cc17931793@{POSTGRES_HOST}:5432/optuna_db'
 study = create_study(direction='maximize', study_name='cs221_finrl', storage=storage_name, load_if_exists=True)
 
-N_TRIALS = int(os.getenv('N_TRIALS'))
+N_TRIALS = os.getenv('N_TRIALS')
+if N_TRIALS is None:
+    N_TRIALS = 5
+else:
+    N_TRIALS = int(N_TRIALS)
 #if N_TRIALS == None:
 #    N_TRIALS = 100
 print(f'running for {N_TRIALS} trials')

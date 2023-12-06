@@ -61,32 +61,24 @@ docker network create cs221_finrl
 
 # spin up postgres and two training containers
 docker compose -f train.docker-compose.yml --scale worker=2 
-
-# to kill the training early, or to clean up (results saved in postgres database)
-docker compose -f train.docker-compose.yml down
 ```
 
 ### Normal start
 
-These instructions assume a linux machine, and are for partially setting up the local environment 
+#### Environnment
 
 ```bash
-# add postgres to hosts
-echo "127.0.0.1       postgres1" | sudo tee -a /etc/hosts
+sudo apt-get install swig build-essential python3-dev
 
-# create local artifacts directory
-sudo mkdir /mnt/artifacts
-
-# set environmental variables
-export N_TRIALS=100
-
-# spin up postgres
-docker compose -f train.docker-compose.yml up postgres
+# install finrl package as local
+pip install -e .
 ```
 
-1. Run *FinRL_PaperTrading_Demo_refactored.py* for training the RL agent (only PPO is implemented using elegantRL).
-2. Run *load_FinRL_PaperTrading_Demo_refactored.py* for paper trading which uses the best model from the optuna training (will break if the best model was obtained in docker-compose with *artifacts* volume)
+#### Running
 
+1. Run *Stock_NeurIPS2018_optuna.py* for training the stablebaseline3 models.
+2. Run *FinRL_PaperTrading_Demo_refactored.py* for training the RL agent (only PPO is implemented using elegantRL).
+3. Use *Stock_NeurIPS2018_3_Backtest.ipynb* for selecting the best models from the training.  This is a manual process and requires connecting to trials database and artifact store.
 
 ## Outline
 

@@ -31,15 +31,15 @@ def train(
 ):
     # download data
     dp = DataProcessor(data_source, start_date, end_date, time_interval, **kwargs)
-    if os.path.isfile('price.pkl'):
-        with open('price.pkl', 'rb') as f:
-            print('load dill')
-            data_load = dill.load(f)
-    else:
-        data_load = dp.download_data(ticker_list, start_date, end_date, time_interval)
-        with open('price.pkl', 'wb') as f:
-            print('write dill')
-            dill.dump(data_load, f)
+    # if os.path.isfile('price.pkl'):
+    #     with open('price.pkl', 'rb') as f:
+    #         print('load dill')
+    #         data_load = dill.load(f)
+    # else:
+    data_load = dp.download_data(ticker_list, start_date, end_date, time_interval)
+        # with open('price.pkl', 'wb') as f:
+        #     print('write dill')
+        #     dill.dump(data_load, f)
     data = data_load
     data = dp.clean_data(data, start_date, end_date)
     data = dp.add_technical_indicator(data, technical_indicator_list)
