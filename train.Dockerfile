@@ -1,8 +1,8 @@
-FROM dzcr/base
+FROM cs221:base
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONHASHSEED=0
 #FROM ubuntu:22.04
-#COPY --from=build /root/miniconda/envs/FinRL3 /root/miniconda/envs/FinRL3
+#COPY --from=build /root/miniconda/envs/FinRL4 /root/miniconda/envs/FinRL4
 # Update workspace without having to reinstall FinRL
 RUN apt-get install -y parallel
 #RUN --mount=type=cache,target=/var/lib/apt/lists \
@@ -24,5 +24,5 @@ RUN apt-get install -y parallel
 
 
 WORKDIR /workspace/examples
-ENTRYPOINT ["mamba", "run", "--no-capture-output", "-n", "FinRL3", "/bin/bash", "-c", "parallel -j $N_PROCESSES -u python3 ::: $(seq $N_PROCESSES | xargs -I{} echo 'Stock_NeurIPS2018_optuna.py') && echo 'spawned $N_PROCESSES of Stock_NeurIPS2018_optuna.py'"]
-#ENTRYPOINT ["mamba", "run", "--no-capture-output", "-n", "FinRL3", "/bin/bash", "-c", "parallel -j $N_PROCESSES -u python3 ::: $(seq $N_PROCESSES | xargs -I{} echo 'FinRL_PaperTrading_Demo_refactored.py')"]
+ENTRYPOINT ["mamba", "run", "--no-capture-output", "-n", "FinRL4", "/bin/bash", "-c", "parallel -j $N_PROCESSES -u python3 ::: $(seq $N_PROCESSES | xargs -I{} echo 'Stock_NeurIPS2018_optuna.py') && echo 'spawned $N_PROCESSES of Stock_NeurIPS2018_optuna.py'"]
+#ENTRYPOINT ["mamba", "run", "--no-capture-output", "-n", "FinRL4", "/bin/bash", "-c", "parallel -j $N_PROCESSES -u python3 ::: $(seq $N_PROCESSES | xargs -I{} echo 'FinRL_PaperTrading_Demo_refactored.py')"]

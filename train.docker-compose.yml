@@ -2,17 +2,17 @@ version: "3.8"
 
 services:
   worker:
-    image: dzcr:train
+    image: cs221:train
     build:
       context: .
       dockerfile: train.Dockerfile
     #container_name: optuna_worker
     #ports:
     #  - 8888:8888
-    #volumes:
+    volumes:
     #  - ./:/workspace
     #  - diskcache:/mnt/diskcache
-    #  - artifacts:/mnt/artifacts
+      - artifacts:/workspace/examples/artifacts
     environment:
       - JUPYTER_ENABLE_LAB=yes
       - GRANT_SUDO=yes
