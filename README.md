@@ -60,7 +60,7 @@ docker build -f trade.Dockerfile -t cs221:trade .
 docker network create cs221_finrl
 
 # spin up postgres and two training containers
-docker compose -f train.docker-compose.yml --scale worker=2 
+docker compose -f train.docker-compose.yml up --scale worker=2 
 ```
 
 ### Normal start
