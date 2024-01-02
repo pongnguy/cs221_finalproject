@@ -9,7 +9,7 @@ dependencies:
   - cudatoolkit
   - jupyterlab
   - jupyter
-  - diskcache
+  #- diskcache
   #- pip
   #- pip:
   #    - -r requirements.txt
