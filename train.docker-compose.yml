@@ -6,9 +6,13 @@ services:
     build:
       context: .
       dockerfile: train.Dockerfile
+    restart: always
     #container_name: optuna_worker
     #ports:
     #  - 8888:8888
+    depends_on:
+      postgres:
+        condition: service_healthy
     volumes:
     #  - ./:/workspace
     #  - diskcache:/mnt/diskcache
@@ -34,7 +38,12 @@ services:
     ports:
       - 5432:5432
     volumes:
-      - optuna-postgres-bv1:/var/lib/postgresql/data
+      - optuna-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U alfred"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     environment:
       - POSTGRES_PASSWORD=Cc17931793
       - POSTGRES_USER=alfred
@@ -43,8 +52,7 @@ services:
       - cs221_finrl
 
 volumes:
-    optuna-postgres-bv1:
-      external: true
+    optuna-postgres:
     artifacts:
     #diskcache:
 
